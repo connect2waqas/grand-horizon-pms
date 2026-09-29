@@ -277,7 +277,8 @@ def get_kpi_analytics(conn: sqlite3.Connection = Depends(get_db)):
 
     # 1. Room Status Counts
     cursor.execute("SELECT status, COUNT(*) FROM Rooms GROUP BY status;")
-    status_counts = dict(cursor.fetchall())
+    status_rows = cursor.fetchall()
+    status_counts = {r[0]: r[1] for r in status_rows}
     total_rooms = sum(status_counts.values())
     occupied_rooms = status_counts.get("Occupied", 0)
     available_rooms = status_counts.get("Available", 0)
@@ -293,44 +294,54 @@ def get_kpi_analytics(conn: sqlite3.Connection = Depends(get_db)):
     cursor.execute(
         "SELECT COALESCE(AVG(price_per_night), 0.0) FROM Rooms WHERE status = 'Occupied';"
     )
-    adr = round(cursor.fetchone()[0], 2)
+    first_row = cursor.fetchone()
+    adr = round(float(first_row[0] or 0.0), 2)
 
     # 4. RevPAR (Revenue Per Available Room)
     revpar = round(adr * (occupancy_rate / 100.0), 2)
 
     # 5. Today's Arrivals and Departures
-    cursor.execute(
-        "SELECT COUNT(*) FROM Bookings WHERE check_in_date = date('now') AND booking_status != 'Cancelled';"
-    )
-    today_checkins = cursor.fetchone()[0]
+    today_checkin_sql = "SELECT COUNT(*) FROM Bookings WHERE check_in_date = CURRENT_DATE AND booking_status != 'Cancelled';" if IS_POSTGRES else "SELECT COUNT(*) FROM Bookings WHERE check_in_date = date('now') AND booking_status != 'Cancelled';"
+    cursor.execute(today_checkin_sql)
+    today_checkins = int(cursor.fetchone()[0] or 0)
 
-    cursor.execute(
-        "SELECT COUNT(*) FROM Bookings WHERE check_out_date = date('now') AND booking_status != 'Cancelled';"
-    )
-    today_checkouts = cursor.fetchone()[0]
+    today_checkout_sql = "SELECT COUNT(*) FROM Bookings WHERE check_out_date = CURRENT_DATE AND booking_status != 'Cancelled';" if IS_POSTGRES else "SELECT COUNT(*) FROM Bookings WHERE check_out_date = date('now') AND booking_status != 'Cancelled';"
+    cursor.execute(today_checkout_sql)
+    today_checkouts = int(cursor.fetchone()[0] or 0)
 
     # Ensure display reflects active stays spanning today if present
-    cursor.execute(
-        "SELECT COUNT(*) FROM Bookings WHERE check_in_date <= date('now') AND check_out_date >= date('now') AND booking_status != 'Cancelled';"
-    )
-    active_stays = cursor.fetchone()[0]
+    active_stays_sql = "SELECT COUNT(*) FROM Bookings WHERE check_in_date <= CURRENT_DATE AND check_out_date >= CURRENT_DATE AND booking_status != 'Cancelled';" if IS_POSTGRES else "SELECT COUNT(*) FROM Bookings WHERE check_in_date <= date('now') AND check_out_date >= date('now') AND booking_status != 'Cancelled';"
+    cursor.execute(active_stays_sql)
+    active_stays = int(cursor.fetchone()[0] or 0)
     display_checkins = max(today_checkins, 1 if active_stays > 0 else 0)
 
     # 6. Revenues (Total Confirmed and Current Month)
     cursor.execute(
         "SELECT COALESCE(SUM(total_price), 0.0) FROM Bookings WHERE booking_status != 'Cancelled';"
     )
-    total_revenue = round(cursor.fetchone()[0], 2)
+    rev_row = cursor.fetchone()
+    total_revenue = round(float(rev_row[0] or 0.0), 2)
 
-    cursor.execute(
-        """
-        SELECT COALESCE(SUM(total_price), 0.0)
-        FROM Bookings
-        WHERE booking_status != 'Cancelled'
-          AND strftime('%Y-%m', check_in_date) = strftime('%Y-%m', 'now');
-        """
-    )
-    monthly_revenue = round(cursor.fetchone()[0], 2)
+    if IS_POSTGRES:
+        cursor.execute(
+            """
+            SELECT COALESCE(SUM(total_price), 0.0)
+            FROM Bookings
+            WHERE booking_status != 'Cancelled'
+              AND to_char(check_in_date, 'YYYY-MM') = to_char(CURRENT_DATE, 'YYYY-MM');
+            """
+        )
+    else:
+        cursor.execute(
+            """
+            SELECT COALESCE(SUM(total_price), 0.0)
+            FROM Bookings
+            WHERE booking_status != 'Cancelled'
+              AND strftime('%Y-%m', check_in_date) = strftime('%Y-%m', 'now');
+            """
+        )
+    monthly_row = cursor.fetchone()
+    monthly_revenue = round(float(monthly_row[0] or 0.0), 2)
 
     return KPIAnalyticsResponse(
         total_rooms=total_rooms,

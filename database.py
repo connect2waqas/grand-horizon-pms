@@ -59,12 +59,37 @@ def get_engine():
     return _engine
 
 
+class CompatibleRow(dict):
+    """
+    Provides dual access by column name (like dict) and by integer index (like sqlite3.Row).
+    Supports dict(rows) for 2-column key-value aggregations.
+    """
+    def __init__(self, data: dict):
+        super().__init__(data)
+        self._values = list(data.values())
+        self._keys = list(data.keys())
+
+    def __getitem__(self, item):
+        if isinstance(item, int):
+            return self._values[item]
+        return super().__getitem__(item)
+
+    def __iter__(self):
+        if len(self._values) == 2:
+            return iter((self._values[0], self._values[1]))
+        return super().__iter__()
+
+    def keys(self):
+        return self._keys
+
+
 class PostgresCursorWrapper:
     """
     Wraps psycopg2.extras.RealDictCursor to provide SQLite-compatible API:
     - Replaces '?' placeholders with '%s'
+    - Translates SQLite date functions (date('now'), strftime) to PostgreSQL (CURRENT_DATE, to_char)
     - Automatically captures lastrowid on INSERT queries via RETURNING id
-    - Provides dictionary-like column name access
+    - Returns CompatibleRow instances supporting both row['col'] and row[0]
     """
     def __init__(self, raw_cursor):
         self._cursor = raw_cursor
@@ -73,6 +98,13 @@ class PostgresCursorWrapper:
     def execute(self, query: str, params=None):
         if params is not None:
             query = query.replace("?", "%s")
+
+        # Translate SQLite-specific date syntax to PostgreSQL
+        query = query.replace("date('now')", "CURRENT_DATE")
+        query = query.replace('date("now")', "CURRENT_DATE")
+        query = query.replace("datetime('now')", "CURRENT_TIMESTAMP")
+        query = query.replace("strftime('%Y-%m', check_in_date)", "to_char(check_in_date, 'YYYY-MM')")
+        query = query.replace("strftime('%Y-%m', 'now')", "to_char(CURRENT_DATE, 'YYYY-MM')")
 
         is_insert = query.strip().upper().startswith("INSERT")
         if is_insert and "RETURNING" not in query.upper():
@@ -95,13 +127,16 @@ class PostgresCursorWrapper:
         return self._cursor.executemany(query, params_list)
 
     def fetchone(self):
-        return self._cursor.fetchone()
+        row = self._cursor.fetchone()
+        return CompatibleRow(row) if row is not None else None
 
     def fetchall(self):
-        return self._cursor.fetchall()
+        rows = self._cursor.fetchall()
+        return [CompatibleRow(r) for r in rows]
 
     def fetchmany(self, size=None):
-        return self._cursor.fetchmany(size) if size else self._cursor.fetchmany()
+        rows = self._cursor.fetchmany(size) if size else self._cursor.fetchmany()
+        return [CompatibleRow(r) for r in rows]
 
     @property
     def description(self):

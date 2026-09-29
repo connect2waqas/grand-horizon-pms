@@ -290,12 +290,13 @@ def get_kpi_analytics(conn: sqlite3.Connection = Depends(get_db)):
     occupancy_rate = round((occupied_rooms / active_rooms * 100), 2) if active_rooms > 0 else 0.0
     occupancy_display = f"{occupancy_rate:.1f}%"
 
-    # 3. ADR (Average Daily Rate of occupied inventory)
+    # 3. Estimated Daily Revenue & ADR (Average Daily Rate of occupied inventory)
     cursor.execute(
-        "SELECT COALESCE(AVG(price_per_night), 0.0) FROM Rooms WHERE status = 'Occupied';"
+        "SELECT COALESCE(SUM(price_per_night), 0.0), COALESCE(AVG(price_per_night), 0.0) FROM Rooms WHERE status = 'Occupied';"
     )
     first_row = cursor.fetchone()
-    adr = round(float(first_row[0] or 0.0), 2)
+    estimated_daily_revenue = round(float(first_row[0] or 0.0), 2)
+    adr = round(float(first_row[1] or 0.0), 2)
 
     # 4. RevPAR (Revenue Per Available Room)
     revpar = round(adr * (occupancy_rate / 100.0), 2)
@@ -352,6 +353,7 @@ def get_kpi_analytics(conn: sqlite3.Connection = Depends(get_db)):
         maintenance_rooms=maintenance_rooms,
         occupancy_rate=occupancy_rate,
         occupancy_rate_display=occupancy_display,
+        estimated_daily_revenue=estimated_daily_revenue,
         adr=adr,
         revpar=revpar,
         today_checkins=display_checkins,

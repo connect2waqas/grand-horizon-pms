@@ -248,6 +248,7 @@ class KPIAnalyticsResponse(BaseModel):
     maintenance_rooms: int = Field(..., description="Rooms taken out of service for repair")
     occupancy_rate: float = Field(..., description="Percentage of active rooms occupied (0.0 to 100.0)")
     occupancy_rate_display: str = Field(..., description="Formatted occupancy percentage string (e.g. '66.7%')")
+    estimated_daily_revenue: float = Field(default=0.0, description="Estimated daily revenue (sum of rates for occupied rooms)")
     adr: float = Field(..., description="Average Daily Rate for occupied inventory")
     revpar: float = Field(..., description="Revenue Per Available Room")
     today_checkins: int = Field(..., description="Arrivals scheduled for today")

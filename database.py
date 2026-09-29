@@ -12,6 +12,8 @@ import sqlite3
 from pathlib import Path
 from typing import Any, List, Optional, Tuple
 
+import psycopg2
+import psycopg2.extras
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.pool import StaticPool

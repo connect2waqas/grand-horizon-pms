@@ -519,7 +519,10 @@ function applyCurrentFilters() {
 // ==========================================
 
 function renderRooms(rooms) {
-  roomsGrid.innerHTML = "";
+  if (roomsGrid) {
+    roomsGrid.removeAttribute("aria-busy");
+    roomsGrid.innerHTML = "";
+  }
 
   if (!rooms || rooms.length === 0) {
     emptyState.classList.remove("hidden");

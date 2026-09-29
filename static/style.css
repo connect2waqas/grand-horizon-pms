@@ -569,22 +569,22 @@ input::-webkit-calendar-picker-indicator {
 
 .rooms-grid {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 16px;
   container-type: inline-size;
   container-name: rooms;
 }
 
-@container rooms (min-width: 500px) {
+@container inventory (min-width: 500px) {
   .rooms-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
     gap: 16px;
   }
 }
 
-@container rooms (min-width: 780px) {
+@container inventory (min-width: 780px) {
   .rooms-grid {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
     gap: 20px;
   }
 }

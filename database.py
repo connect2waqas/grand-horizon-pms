@@ -6,6 +6,7 @@ This module manages the SQLite database lifecycle, schema migrations,
 and initial data seeding. It enforces relational integrity and constraints.
 """
 
+import datetime
 import json
 import os
 import sqlite3
@@ -64,10 +65,19 @@ class CompatibleRow(dict):
     """
     Provides dual access by column name (like dict) and by integer index (like sqlite3.Row).
     Supports dict(rows) for 2-column key-value aggregations.
-    Automatically coerces decimal.Decimal (PostgreSQL numeric types) to float.
+    Automatically coerces:
+    - decimal.Decimal (PostgreSQL numeric types) to float
+    - datetime.date (PostgreSQL date columns) to ISO-formatted str (matching SQLite TEXT dates)
     """
     def __init__(self, data: dict):
-        cleaned = {k: (float(v) if isinstance(v, Decimal) else v) for k, v in data.items()}
+        cleaned = {}
+        for k, v in data.items():
+            if isinstance(v, Decimal):
+                cleaned[k] = float(v)
+            elif isinstance(v, datetime.date) and not isinstance(v, datetime.datetime):
+                cleaned[k] = v.isoformat()
+            else:
+                cleaned[k] = v
         super().__init__(cleaned)
         self._values = list(cleaned.values())
         self._keys = list(cleaned.keys())

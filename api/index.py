@@ -721,9 +721,11 @@ def calculate_dynamic_pricing(
             coupon_row = cursor.fetchone()
             if coupon_row:
                 today_iso = date.today().isoformat()
+                c_from = str(coupon_row["valid_from"])
+                c_until = str(coupon_row["valid_until"])
                 is_valid = (
                     coupon_row["is_active"] == 1
-                    and coupon_row["valid_from"] <= today_iso <= coupon_row["valid_until"]
+                    and c_from <= today_iso <= c_until
                     and coupon_row["used_count"] < coupon_row["max_uses"]
                     and pre_coupon_subtotal >= coupon_row["min_total"]
                 )
@@ -1883,8 +1885,8 @@ def get_coupons(
             code=r["code"],
             discount_type=DiscountType(r["discount_type"]),
             discount_value=r["discount_value"],
-            valid_from=date.fromisoformat(r["valid_from"]),
-            valid_until=date.fromisoformat(r["valid_until"]),
+            valid_from=r["valid_from"] if isinstance(r["valid_from"], date) else date.fromisoformat(str(r["valid_from"])),
+            valid_until=r["valid_until"] if isinstance(r["valid_until"], date) else date.fromisoformat(str(r["valid_until"])),
             min_total=r["min_total"],
             max_uses=r["max_uses"],
             used_count=r["used_count"],
@@ -1959,8 +1961,8 @@ def create_coupon(
         code=r["code"],
         discount_type=DiscountType(r["discount_type"]),
         discount_value=r["discount_value"],
-        valid_from=date.fromisoformat(r["valid_from"]),
-        valid_until=date.fromisoformat(r["valid_until"]),
+        valid_from=r["valid_from"] if isinstance(r["valid_from"], date) else date.fromisoformat(str(r["valid_from"])),
+        valid_until=r["valid_until"] if isinstance(r["valid_until"], date) else date.fromisoformat(str(r["valid_until"])),
         min_total=r["min_total"],
         max_uses=r["max_uses"],
         used_count=r["used_count"],
@@ -2000,14 +2002,16 @@ def validate_coupon(
         )
 
     today_iso = date.today().isoformat()
-    if today_iso < coupon["valid_from"]:
+    c_from = str(coupon["valid_from"])
+    c_until = str(coupon["valid_until"])
+    if today_iso < c_from:
         return CouponValidateResponse(
             is_valid=False,
             code=clean_code,
-            message=f"Coupon is not valid until {coupon['valid_from']}.",
+            message=f"Coupon is not valid until {c_from}.",
         )
 
-    if today_iso > coupon["valid_until"]:
+    if today_iso > c_until:
         return CouponValidateResponse(
             is_valid=False,
             code=clean_code,

@@ -26,8 +26,9 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Generator, List, Optional
 import sqlite3
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Request, status
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from database import (
@@ -148,6 +149,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Enable GZip compression for responses >= 1000 bytes (Core Web Vitals & speed optimization)
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
 # ==========================================
 # Vercel & Backward Compatibility Path Rewriter
 # ==========================================
@@ -248,7 +252,7 @@ def get_stats(conn: sqlite3.Connection = Depends(get_db)):
     """
     Returns high-level KPI metrics for backward compatibility.
     """
-    kpis = get_kpi_analytics(conn=conn)
+    kpis = get_kpi_analytics(response=Response(), conn=conn)
     return {
         "total_rooms": kpis.total_rooms,
         "occupancy_rate": kpis.occupancy_rate_display,
@@ -263,7 +267,10 @@ def get_stats(conn: sqlite3.Connection = Depends(get_db)):
     summary="Get comprehensive property performance KPIs",
     tags=["Analytics"],
 )
-def get_kpi_analytics(conn: sqlite3.Connection = Depends(get_db)):
+def get_kpi_analytics(
+    response: Response,
+    conn: sqlite3.Connection = Depends(get_db),
+):
     """
     Computes enterprise property management KPIs using real-time database aggregations:
     - Inventory: total, active, available, occupied, cleaning, maintenance
@@ -273,6 +280,8 @@ def get_kpi_analytics(conn: sqlite3.Connection = Depends(get_db)):
     - Daily Turnover: Today's arrivals and departures
     - Revenue Breakdown: Total confirmed revenue and current month revenue
     """
+    if response:
+        response.headers["Cache-Control"] = "public, max-age=60, s-maxage=60, stale-while-revalidate=30"
     try:
         cursor = conn.cursor()
 

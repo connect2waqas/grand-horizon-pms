@@ -620,7 +620,7 @@ def calculate_dynamic_pricing(
     """
     cursor = conn.cursor()
     nights = (check_out_date - check_in_date).days
-    base_rate = room["price_per_night"]
+    base_rate = float(room["price_per_night"])
 
     nightly_details: list[NightlyRateDetail] = []
     raw_room_total = round(nights * base_rate, 2)
@@ -694,7 +694,7 @@ def calculate_dynamic_pricing(
     if amenity_ids:
         placeholders = ",".join("?" for _ in amenity_ids)
         cursor.execute(f"SELECT price FROM Amenities WHERE id IN ({placeholders});", tuple(amenity_ids))
-        amenities_charge = round(sum(r["price"] for r in cursor.fetchall()), 2)
+        amenities_charge = round(sum(float(r["price"]) for r in cursor.fetchall()), 2)
 
     pre_coupon_subtotal = round(net_room_charge + amenities_charge, 2)
 
@@ -730,7 +730,7 @@ def calculate_dynamic_pricing(
                 if is_valid:
                     coupon_applied = True
                     dtype = coupon_row["discount_type"]
-                    dval = coupon_row["discount_value"]
+                    dval = float(coupon_row["discount_value"])
                     if dtype == "Percentage":
                         coupon_discount = round(pre_coupon_subtotal * (dval / 100.0), 2)
                     else:  # FixedAmount
@@ -910,13 +910,13 @@ def _create_booking_impl(
             AmenityResponse(
                 id=r["id"],
                 name=r["name"],
-                price=r["price"],
+                price=float(r["price"]),
                 description=r["description"],
                 created_at=str(r["created_at"]) if r["created_at"] else None,
             )
             for r in amenity_rows
         ]
-        amenities_total = sum(r["price"] for r in amenity_rows)
+        amenities_total = sum(float(r["price"]) for r in amenity_rows)
 
     # 5. Schema Migration & Dynamic Pricing Calculation
     if not IS_POSTGRES:
@@ -1071,11 +1071,9 @@ def create_booking(
             conn.rollback()
         except Exception:
             pass
-        import traceback
-        tb = traceback.format_exc()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Reservation booking error: {type(exc).__name__}: {str(exc)}\n{tb}",
+            detail=f"Failed to create reservation: {str(exc)}",
         )
 
 

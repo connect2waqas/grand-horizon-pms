@@ -1017,6 +1017,12 @@ async function handleBookingSubmit(event) {
     // Success! Show receipt modal and refresh stats & rooms & front desk table
     showBookingReceipt(data);
     showToast("Reservation Confirmed.", "success");
+    guestFirstName.value = "";
+    guestLastName.value = "";
+    guestEmail.value = "";
+    guestPhone.value = "";
+    if (couponCodeInput) couponCodeInput.value = "";
+    if (couponStatusMessage) couponStatusMessage.classList.add("hidden");
     fetchKPIs();
     fetchRooms();
     fetchBookings();

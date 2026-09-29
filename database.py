@@ -9,6 +9,7 @@ and initial data seeding. It enforces relational integrity and constraints.
 import json
 import os
 import sqlite3
+from decimal import Decimal
 from pathlib import Path
 from typing import Any, List, Optional, Tuple
 
@@ -63,11 +64,13 @@ class CompatibleRow(dict):
     """
     Provides dual access by column name (like dict) and by integer index (like sqlite3.Row).
     Supports dict(rows) for 2-column key-value aggregations.
+    Automatically coerces decimal.Decimal (PostgreSQL numeric types) to float.
     """
     def __init__(self, data: dict):
-        super().__init__(data)
-        self._values = list(data.values())
-        self._keys = list(data.keys())
+        cleaned = {k: (float(v) if isinstance(v, Decimal) else v) for k, v in data.items()}
+        super().__init__(cleaned)
+        self._values = list(cleaned.values())
+        self._keys = list(cleaned.keys())
 
     def __getitem__(self, item):
         if isinstance(item, int):
@@ -107,7 +110,8 @@ class PostgresCursorWrapper:
         query = query.replace("strftime('%Y-%m', 'now')", "to_char(CURRENT_DATE, 'YYYY-MM')")
 
         is_insert = query.strip().upper().startswith("INSERT")
-        if is_insert and "RETURNING" not in query.upper():
+        is_booking_amenities = "BOOKINGAMENITIES" in query.upper()
+        if is_insert and "RETURNING" not in query.upper() and not is_booking_amenities:
             trimmed = query.rstrip().rstrip(";")
             returning_query = f"{trimmed} RETURNING id;"
             try:

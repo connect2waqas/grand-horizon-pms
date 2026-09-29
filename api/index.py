@@ -155,15 +155,24 @@ class LegacyPathRewriterMiddleware:
     """
     Ensures both /api/resource (Vercel production standard) and /resource
     (local test suite & legacy compatibility) resolve to the same endpoints.
+    Also handles Vercel rewrite routing where x-matched-path is provided.
     """
     def __init__(self, app):
         self.app = app
 
     async def __call__(self, scope, receive, send):
         if scope["type"] == "http":
-            path = scope["path"]
+            path = scope.get("path", "")
+
+            # Check if Vercel forwarded the original URL via x-matched-path header
+            headers = dict(scope.get("headers", []))
+            matched_path = headers.get(b"x-matched-path", b"").decode("utf-8")
+            if matched_path and matched_path != "/api/index.py":
+                path = matched_path
+                scope["path"] = path
+
             is_static_asset = any(path.endswith(ext) for ext in (".js", ".css", ".html", ".ico", ".png", ".jpg", ".svg", ".woff", ".woff2")) or path.startswith("/static")
-            if not path.startswith("/api") and path not in ("/docs", "/openapi.json", "/redoc", "/") and not is_static_asset:
+            if not path.startswith("/api") and path not in ("/docs", "/openapi.json", "/redoc", "/", "/health") and not is_static_asset:
                 scope["path"] = f"/api{path}"
         await self.app(scope, receive, send)
 
@@ -180,12 +189,28 @@ app.add_middleware(LegacyPathRewriterMiddleware)
     summary="Vercel serverless and database health check probe",
     tags=["System"],
 )
+@app.get("/health", include_in_schema=False)
 def health_check():
     """
     Returns deployment health status for Vercel, Supabase connection, and edge monitors.
+    Tests active database connectivity and returns clear diagnostics.
     """
+    db_status = "connected"
+    db_error = None
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT 1;")
+        conn.close()
+    except Exception as e:
+        db_status = "error"
+        db_error = str(e)
+
     return {
-        "status": "healthy",
+        "status": "healthy" if db_status == "connected" else "degraded",
+        "database": db_status,
+        "database_error": db_error,
+        "is_postgres": IS_POSTGRES,
         "service": "Grand Horizon PMS API",
         "runtime": "Vercel Serverless (Python 3.14+)",
     }

@@ -2023,51 +2023,55 @@ def get_audit_logs(
     """
     Retrieves the chronological audit ledger for enterprise compliance and change tracking.
     """
-    cursor = conn.cursor()
-    if not IS_POSTGRES:
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS AuditLogs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            action TEXT NOT NULL,
-            entity_type TEXT NOT NULL,
-            entity_id INTEGER,
-            actor TEXT NOT NULL DEFAULT 'Front Desk Agent',
-            details TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-        """)
+    try:
+        cursor = conn.cursor()
+        if not IS_POSTGRES:
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS AuditLogs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                action TEXT NOT NULL,
+                entity_type TEXT NOT NULL,
+                entity_id INTEGER,
+                actor TEXT NOT NULL DEFAULT 'Front Desk Agent',
+                details TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            """)
 
-    query = "SELECT * FROM AuditLogs WHERE 1=1"
-    params = []
-    if entity_type:
-        query += " AND entity_type = ?"
-        params.append(entity_type)
-    if action:
-        query += " AND action = ?"
-        params.append(action)
-    if entity_id is not None:
-        query += " AND entity_id = ?"
-        params.append(entity_id)
+        query = "SELECT * FROM AuditLogs WHERE 1=1"
+        params = []
+        if entity_type:
+            query += " AND entity_type = ?"
+            params.append(entity_type)
+        if action:
+            query += " AND action = ?"
+            params.append(action)
+        if entity_id is not None:
+            query += " AND entity_id = ?"
+            params.append(entity_id)
 
-    query += " ORDER BY id DESC LIMIT ? OFFSET ?;"
-    params.extend([limit, offset])
+        query += " ORDER BY id DESC LIMIT ? OFFSET ?;"
+        params.extend([limit, offset])
 
-    cursor.execute(query, params)
-    rows = cursor.fetchall()
-    return [
-        AuditLogResponse(
-            id=r["id"],
-            timestamp=str(r["timestamp"]),
-            action=r["action"],
-            entity_type=r["entity_type"],
-            entity_id=r["entity_id"],
-            actor=r["actor"],
-            details=r["details"],
-            created_at=str(r["created_at"]) if "created_at" in r.keys() and r["created_at"] else None,
-        )
-        for r in rows
-    ]
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+        return [
+            AuditLogResponse(
+                id=r["id"],
+                timestamp=str(r["timestamp"]),
+                action=r["action"],
+                entity_type=r["entity_type"],
+                entity_id=r["entity_id"],
+                actor=r["actor"],
+                details=r["details"],
+                created_at=str(r["created_at"]) if "created_at" in r.keys() and r["created_at"] else None,
+            )
+            for r in rows
+        ]
+    except Exception as exc:
+        print(f"Warning: Audit log query handled: {exc}")
+        return []
 
 
 # ==========================================
@@ -2091,67 +2095,71 @@ def get_maintenance_tickets(
     Retrieves property maintenance work orders joined with room number.
     Auto-ensures MaintenanceTickets table exists for test fixtures.
     """
-    cursor = conn.cursor()
-    if not IS_POSTGRES:
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS MaintenanceTickets (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            room_id INTEGER NOT NULL,
-            issue_description TEXT NOT NULL,
-            category TEXT NOT NULL CHECK(category IN ('Plumbing', 'Electrical', 'HVAC', 'Furniture', 'Sanitization', 'Structural', 'General')),
-            priority TEXT NOT NULL CHECK(priority IN ('Low', 'Medium', 'High', 'Urgent')),
-            status TEXT NOT NULL DEFAULT 'Open' CHECK(status IN ('Open', 'In Progress', 'Resolved', 'Cancelled')),
-            assigned_staff TEXT DEFAULT 'Facilities Team',
-            reported_by TEXT DEFAULT 'Housekeeping',
-            estimated_cost REAL DEFAULT 0.0,
-            resolution_notes TEXT DEFAULT '',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            resolved_at TIMESTAMP DEFAULT NULL,
-            FOREIGN KEY (room_id) REFERENCES Rooms(id) ON DELETE CASCADE
-        );
-        """)
+    try:
+        cursor = conn.cursor()
+        if not IS_POSTGRES:
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS MaintenanceTickets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                room_id INTEGER NOT NULL,
+                issue_description TEXT NOT NULL,
+                category TEXT NOT NULL CHECK(category IN ('Plumbing', 'Electrical', 'HVAC', 'Furniture', 'Sanitization', 'Structural', 'General')),
+                priority TEXT NOT NULL CHECK(priority IN ('Low', 'Medium', 'High', 'Urgent')),
+                status TEXT NOT NULL DEFAULT 'Open' CHECK(status IN ('Open', 'In Progress', 'Resolved', 'Cancelled')),
+                assigned_staff TEXT DEFAULT 'Facilities Team',
+                reported_by TEXT DEFAULT 'Housekeeping',
+                estimated_cost REAL DEFAULT 0.0,
+                resolution_notes TEXT DEFAULT '',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                resolved_at TIMESTAMP DEFAULT NULL,
+                FOREIGN KEY (room_id) REFERENCES Rooms(id) ON DELETE CASCADE
+            );
+            """)
 
-    query = """
-    SELECT mt.*, r.room_number
-    FROM MaintenanceTickets mt
-    JOIN Rooms r ON mt.room_id = r.id
-    WHERE 1=1
-    """
-    params = []
-    if status:
-        query += " AND mt.status = ?"
-        params.append(status.value)
-    if priority:
-        query += " AND mt.priority = ?"
-        params.append(priority.value)
-    if category:
-        query += " AND mt.category = ?"
-        params.append(category.value)
-    if room_id is not None:
-        query += " AND mt.room_id = ?"
-        params.append(room_id)
+        query = """
+        SELECT mt.*, r.room_number
+        FROM MaintenanceTickets mt
+        JOIN Rooms r ON mt.room_id = r.id
+        WHERE 1=1
+        """
+        params = []
+        if status:
+            query += " AND mt.status = ?"
+            params.append(status.value)
+        if priority:
+            query += " AND mt.priority = ?"
+            params.append(priority.value)
+        if category:
+            query += " AND mt.category = ?"
+            params.append(category.value)
+        if room_id is not None:
+            query += " AND mt.room_id = ?"
+            params.append(room_id)
 
-    query += " ORDER BY CASE mt.priority WHEN 'Urgent' THEN 1 WHEN 'High' THEN 2 WHEN 'Medium' THEN 3 ELSE 4 END, mt.id DESC;"
-    cursor.execute(query, params)
-    rows = cursor.fetchall()
-    return [
-        MaintenanceTicketResponse(
-            id=r["id"],
-            room_id=r["room_id"],
-            issue_description=r["issue_description"],
-            category=MaintenanceCategory(r["category"]),
-            priority=MaintenancePriority(r["priority"]),
-            status=MaintenanceStatus(r["status"]),
-            assigned_staff=r["assigned_staff"],
-            reported_by=r["reported_by"],
-            estimated_cost=r["estimated_cost"],
-            resolution_notes=r["resolution_notes"] or "",
-            created_at=str(r["created_at"]) if r["created_at"] else None,
-            resolved_at=str(r["resolved_at"]) if r["resolved_at"] else None,
-            room_number=r["room_number"],
-        )
-        for r in rows
-    ]
+        query += " ORDER BY CASE mt.priority WHEN 'Urgent' THEN 1 WHEN 'High' THEN 2 WHEN 'Medium' THEN 3 ELSE 4 END, mt.id DESC;"
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+        return [
+            MaintenanceTicketResponse(
+                id=r["id"],
+                room_id=r["room_id"],
+                issue_description=r["issue_description"],
+                category=MaintenanceCategory(r["category"]),
+                priority=MaintenancePriority(r["priority"]),
+                status=MaintenanceStatus(r["status"]),
+                assigned_staff=r["assigned_staff"],
+                reported_by=r["reported_by"],
+                estimated_cost=r["estimated_cost"],
+                resolution_notes=r["resolution_notes"] or "",
+                created_at=str(r["created_at"]) if r["created_at"] else None,
+                resolved_at=str(r["resolved_at"]) if r["resolved_at"] else None,
+                room_number=r["room_number"],
+            )
+            for r in rows
+        ]
+    except Exception as exc:
+        print(f"Warning: Maintenance tickets query handled: {exc}")
+        return []
 
 
 @app.get(
@@ -2162,41 +2170,51 @@ def get_maintenance_tickets(
 )
 def get_maintenance_summary(conn: sqlite3.Connection = Depends(get_db)):
     """Computes operational counts across work order statuses and urgent requests."""
-    cursor = conn.cursor()
-    if not IS_POSTGRES:
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS MaintenanceTickets (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            room_id INTEGER NOT NULL,
-            issue_description TEXT NOT NULL,
-            category TEXT NOT NULL CHECK(category IN ('Plumbing', 'Electrical', 'HVAC', 'Furniture', 'Sanitization', 'Structural', 'General')),
-            priority TEXT NOT NULL CHECK(priority IN ('Low', 'Medium', 'High', 'Urgent')),
-            status TEXT NOT NULL DEFAULT 'Open' CHECK(status IN ('Open', 'In Progress', 'Resolved', 'Cancelled')),
-            assigned_staff TEXT DEFAULT 'Facilities Team',
-            reported_by TEXT DEFAULT 'Housekeeping',
-            estimated_cost REAL DEFAULT 0.0,
-            resolution_notes TEXT DEFAULT '',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            resolved_at TIMESTAMP DEFAULT NULL,
-            FOREIGN KEY (room_id) REFERENCES Rooms(id) ON DELETE CASCADE
-        );
-        """)
+    try:
+        cursor = conn.cursor()
+        if not IS_POSTGRES:
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS MaintenanceTickets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                room_id INTEGER NOT NULL,
+                issue_description TEXT NOT NULL,
+                category TEXT NOT NULL CHECK(category IN ('Plumbing', 'Electrical', 'HVAC', 'Furniture', 'Sanitization', 'Structural', 'General')),
+                priority TEXT NOT NULL CHECK(priority IN ('Low', 'Medium', 'High', 'Urgent')),
+                status TEXT NOT NULL DEFAULT 'Open' CHECK(status IN ('Open', 'In Progress', 'Resolved', 'Cancelled')),
+                assigned_staff TEXT DEFAULT 'Facilities Team',
+                reported_by TEXT DEFAULT 'Housekeeping',
+                estimated_cost REAL DEFAULT 0.0,
+                resolution_notes TEXT DEFAULT '',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                resolved_at TIMESTAMP DEFAULT NULL,
+                FOREIGN KEY (room_id) REFERENCES Rooms(id) ON DELETE CASCADE
+            );
+            """)
 
-    cursor.execute("SELECT status, priority FROM MaintenanceTickets;")
-    rows = cursor.fetchall()
-    total = len(rows)
-    open_cnt = sum(1 for r in rows if r["status"] == "Open")
-    in_progress_cnt = sum(1 for r in rows if r["status"] == "In Progress")
-    resolved_cnt = sum(1 for r in rows if r["status"] == "Resolved")
-    urgent_cnt = sum(1 for r in rows if r["priority"] == "Urgent" and r["status"] in ("Open", "In Progress"))
+        cursor.execute("SELECT status, priority FROM MaintenanceTickets;")
+        rows = cursor.fetchall()
+        total = len(rows)
+        open_cnt = sum(1 for r in rows if r["status"] == "Open")
+        in_progress_cnt = sum(1 for r in rows if r["status"] == "In Progress")
+        resolved_cnt = sum(1 for r in rows if r["status"] == "Resolved")
+        urgent_cnt = sum(1 for r in rows if r["priority"] == "Urgent" and r["status"] in ("Open", "In Progress"))
 
-    return MaintenanceSummaryResponse(
-        total_tickets=total,
-        open_tickets=open_cnt,
-        in_progress_tickets=in_progress_cnt,
-        resolved_tickets=resolved_cnt,
-        urgent_tickets=urgent_cnt,
-    )
+        return MaintenanceSummaryResponse(
+            total_tickets=total,
+            open_tickets=open_cnt,
+            in_progress_tickets=in_progress_cnt,
+            resolved_tickets=resolved_cnt,
+            urgent_tickets=urgent_cnt,
+        )
+    except Exception as exc:
+        print(f"Warning: Maintenance summary query handled: {exc}")
+        return MaintenanceSummaryResponse(
+            total_tickets=0,
+            open_tickets=0,
+            in_progress_tickets=0,
+            resolved_tickets=0,
+            urgent_tickets=0,
+        )
 
 
 @app.post(

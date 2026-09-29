@@ -425,13 +425,17 @@ async function fetchKPIs() {
     if (!res.ok) throw new Error("Failed to load metrics");
     const data = await res.json();
 
-    kpiTotalRooms.textContent = data.total_rooms;
-    kpiOccupancy.textContent = data.occupancy_rate_display;
-    kpiCheckins.textContent = data.today_checkins;
-    kpiRevenue.textContent = `$${data.total_revenue.toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
+    if (kpiTotalRooms) kpiTotalRooms.textContent = data.total_rooms;
+    if (kpiOccupancy) kpiOccupancy.textContent = data.occupancy_rate_display || `${data.occupancy_rate.toFixed(1)}%`;
+    if (kpiCheckins) kpiCheckins.textContent = data.today_checkins;
+
+    const dailyEst = data.estimated_daily_revenue !== undefined ? data.estimated_daily_revenue : (data.total_revenue || 0);
+    if (kpiRevenue) {
+      kpiRevenue.textContent = `$${dailyEst.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    }
 
     if (kpiInventorySub) {
-      kpiInventorySub.textContent = `${data.available_rooms} Avail • ${data.cleaning_rooms} Clean • ${data.maintenance_rooms} Maint`;
+      kpiInventorySub.textContent = `${data.available_rooms} Avail • ${data.occupied_rooms} Occ • ${data.cleaning_rooms} Clean • ${data.maintenance_rooms} Maint`;
     }
     if (kpiAdrRevpar) {
       kpiAdrRevpar.textContent = `ADR $${data.adr.toFixed(2)} • RevPAR $${data.revpar.toFixed(2)}`;
@@ -440,14 +444,14 @@ async function fetchKPIs() {
       kpiTurnoverSub.textContent = `${data.today_checkins} Arrival${data.today_checkins === 1 ? '' : 's'} • ${data.today_checkouts} Departure${data.today_checkouts === 1 ? '' : 's'}`;
     }
     if (kpiMonthlyRev) {
-      kpiMonthlyRev.textContent = `This Month: $${data.monthly_revenue.toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
+      kpiMonthlyRev.textContent = `Total: $${data.total_revenue.toLocaleString("en-US", { minimumFractionDigits: 2 })} • Month: $${data.monthly_revenue.toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
     }
   } catch (err) {
     console.warn("KPI load fallback:", err);
-    kpiTotalRooms.textContent = allRoomsData.length || "6";
-    kpiOccupancy.textContent = "16.7%";
-    kpiCheckins.textContent = "1";
-    kpiRevenue.textContent = "$1,449.87";
+    if (kpiTotalRooms) kpiTotalRooms.textContent = allRoomsData.length || "6";
+    if (kpiOccupancy) kpiOccupancy.textContent = "50.0%";
+    if (kpiCheckins) kpiCheckins.textContent = "0";
+    if (kpiRevenue) kpiRevenue.textContent = "$0.00";
   }
 }
 

@@ -3,6 +3,14 @@
    Refactored for Modern B2B / SaaS Standards (Slate Dark Palette)
    ========================================================================== */
 
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: local('Plus Jakarta Sans');
+}
+
 :root {
   /* Surface & Canvas System */
   --canvas-bg: #0f172a;        /* Slate 900: Deep matte background */
@@ -442,13 +450,15 @@ input[type="text"],
 input[type="email"],
 input[type="tel"],
 input[type="date"],
-select {
+select,
+textarea {
   width: 100%;
+  min-height: 44px;
   background-color: var(--surface-input);
   color: var(--text-high-contrast);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
-  padding: 9px 12px;
+  padding: 10px 14px;
   font-family: var(--font-family);
   font-size: 13px;
   transition: var(--transition-standard);
@@ -456,27 +466,31 @@ select {
 }
 
 input:hover,
-select:hover {
+select:hover,
+textarea:hover {
   border-color: var(--border-hover);
 }
 
 input:focus,
-select:focus {
+select:focus,
+textarea:focus {
   border-color: var(--brand-primary);
   box-shadow: 0 0 0 3px var(--brand-ring);
 }
 
-input::placeholder {
+input::placeholder,
+textarea::placeholder {
   color: var(--text-subtle);
 }
 
 input::-webkit-calendar-picker-indicator {
   filter: invert(0.7);
   cursor: pointer;
+  padding: 4px;
 }
 
 /* ==========================================================================
-   Buttons & CTAs
+   Buttons & CTAs (Min Touch Target 44px)
    ========================================================================== */
 
 .btn {
@@ -484,16 +498,19 @@ input::-webkit-calendar-picker-indicator {
   align-items: center;
   justify-content: center;
   gap: 8px;
+  min-height: 44px;
   font-family: var(--font-family);
   font-size: 13px;
   font-weight: 600;
   border-radius: var(--radius-md);
-  padding: 9px 16px;
+  padding: 10px 18px;
   border: 1px solid transparent;
   cursor: pointer;
   transition: var(--transition-standard);
   text-decoration: none;
   white-space: nowrap;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 /* Primary CTA: Solid Indigo */
@@ -744,13 +761,15 @@ input::-webkit-calendar-picker-indicator {
   color: var(--text-high-contrast);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
-  padding: 4px 8px;
-  font-size: 11px;
+  padding: 8px 12px;
+  min-height: 44px;
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   outline: none;
   width: auto;
   transition: var(--transition-standard);
+  -webkit-tap-highlight-color: transparent;
 }
 
 .quick-action-select:hover {
@@ -760,6 +779,7 @@ input::-webkit-calendar-picker-indicator {
 
 .quick-action-select:focus {
   border-color: var(--brand-primary);
+  box-shadow: 0 0 0 3px var(--brand-ring);
 }
 
 /* Room Price Fluid Typography */

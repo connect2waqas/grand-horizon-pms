@@ -704,9 +704,12 @@ def calculate_dynamic_pricing(
     clean_code = coupon_code.strip().upper() if coupon_code else None
 
     if clean_code:
-        cursor.execute("PRAGMA table_info(Coupons);")
-        c_cols = {r[1] for r in cursor.fetchall()}
-        if c_cols:
+        has_coupons = True
+        if not IS_POSTGRES:
+            cursor.execute("PRAGMA table_info(Coupons);")
+            c_cols = {r[1] for r in cursor.fetchall()}
+            has_coupons = bool(c_cols)
+        if has_coupons:
             cursor.execute(
                 """
                 SELECT id, code, discount_type, discount_value, valid_from, valid_until, min_total, max_uses, used_count, is_active
@@ -857,12 +860,13 @@ def create_booking(
             guest_id = existing_guest["id"]
             guest_record = existing_guest
         else:
-            cursor.execute("PRAGMA table_info(Guests);")
-            existing_cols = {row[1] for row in cursor.fetchall()}
-            if "vip_tier" not in existing_cols:
-                cursor.execute("ALTER TABLE Guests ADD COLUMN vip_tier TEXT NOT NULL DEFAULT 'Standard';")
-            if "notes" not in existing_cols:
-                cursor.execute("ALTER TABLE Guests ADD COLUMN notes TEXT DEFAULT '';")
+            if not IS_POSTGRES:
+                cursor.execute("PRAGMA table_info(Guests);")
+                existing_cols = {row[1] for row in cursor.fetchall()}
+                if "vip_tier" not in existing_cols:
+                    cursor.execute("ALTER TABLE Guests ADD COLUMN vip_tier TEXT NOT NULL DEFAULT 'Standard';")
+                if "notes" not in existing_cols:
+                    cursor.execute("ALTER TABLE Guests ADD COLUMN notes TEXT DEFAULT '';")
 
             cursor.execute(
                 """
@@ -879,6 +883,11 @@ def create_booking(
                 ),
             )
             guest_id = cursor.lastrowid
+            if not guest_id:
+                cursor.execute("SELECT id FROM Guests WHERE email = ?;", (guest_payload.email,))
+                g_row = cursor.fetchone()
+                guest_id = g_row["id"] if g_row else None
+
             cursor.execute(
                 "SELECT id, first_name, last_name, email, phone, vip_tier, notes, created_at FROM Guests WHERE id = ?;",
                 (guest_id,),
@@ -917,12 +926,13 @@ def create_booking(
         amenities_total = sum(r["price"] for r in amenity_rows)
 
     # 5. Schema Migration & Dynamic Pricing Calculation
-    cursor.execute("PRAGMA table_info(Bookings);")
-    b_cols = {r[1] for r in cursor.fetchall()}
-    if "coupon_code" not in b_cols:
-        cursor.execute("ALTER TABLE Bookings ADD COLUMN coupon_code TEXT DEFAULT NULL;")
-    if "discount_amount" not in b_cols:
-        cursor.execute("ALTER TABLE Bookings ADD COLUMN discount_amount REAL NOT NULL DEFAULT 0.0;")
+    if not IS_POSTGRES:
+        cursor.execute("PRAGMA table_info(Bookings);")
+        b_cols = {r[1] for r in cursor.fetchall()}
+        if "coupon_code" not in b_cols:
+            cursor.execute("ALTER TABLE Bookings ADD COLUMN coupon_code TEXT DEFAULT NULL;")
+        if "discount_amount" not in b_cols:
+            cursor.execute("ALTER TABLE Bookings ADD COLUMN discount_amount REAL NOT NULL DEFAULT 0.0;")
 
     quote = calculate_dynamic_pricing(
         room=room,
@@ -968,6 +978,18 @@ def create_booking(
         ),
     )
     booking_id = cursor.lastrowid
+    if not booking_id:
+        cursor.execute(
+            """
+            SELECT id FROM Bookings
+            WHERE guest_id = ? AND room_id = ? AND check_in_date = ?
+            ORDER BY id DESC LIMIT 1;
+            """,
+            (guest_id, booking_data.room_id, booking_data.check_in_date.isoformat()),
+        )
+        b_row = cursor.fetchone()
+        booking_id = b_row["id"] if b_row else None
+
 
     # 7. Record Junction Entries in BookingAmenities
     for amenity in selected_amenities:
@@ -1043,12 +1065,13 @@ def create_booking(
 def get_booking_by_id(booking_id: int, conn: sqlite3.Connection) -> BookingResponse:
     """Helper to fetch a complete BookingResponse with joined room, guest, and amenities."""
     cursor = conn.cursor()
-    cursor.execute("PRAGMA table_info(Bookings);")
-    b_cols = {r[1] for r in cursor.fetchall()}
-    if "coupon_code" not in b_cols:
-        cursor.execute("ALTER TABLE Bookings ADD COLUMN coupon_code TEXT DEFAULT NULL;")
-    if "discount_amount" not in b_cols:
-        cursor.execute("ALTER TABLE Bookings ADD COLUMN discount_amount REAL NOT NULL DEFAULT 0.0;")
+    if not IS_POSTGRES:
+        cursor.execute("PRAGMA table_info(Bookings);")
+        b_cols = {r[1] for r in cursor.fetchall()}
+        if "coupon_code" not in b_cols:
+            cursor.execute("ALTER TABLE Bookings ADD COLUMN coupon_code TEXT DEFAULT NULL;")
+        if "discount_amount" not in b_cols:
+            cursor.execute("ALTER TABLE Bookings ADD COLUMN discount_amount REAL NOT NULL DEFAULT 0.0;")
 
     cursor.execute(
         """
@@ -1644,12 +1667,13 @@ def create_guest_profile(
             detail=f"A guest with email '{guest.email}' already exists.",
         )
 
-    cursor.execute("PRAGMA table_info(Guests);")
-    existing_cols = {row[1] for row in cursor.fetchall()}
-    if "vip_tier" not in existing_cols:
-        cursor.execute("ALTER TABLE Guests ADD COLUMN vip_tier TEXT NOT NULL DEFAULT 'Standard';")
-    if "notes" not in existing_cols:
-        cursor.execute("ALTER TABLE Guests ADD COLUMN notes TEXT DEFAULT '';")
+    if not IS_POSTGRES:
+        cursor.execute("PRAGMA table_info(Guests);")
+        existing_cols = {row[1] for row in cursor.fetchall()}
+        if "vip_tier" not in existing_cols:
+            cursor.execute("ALTER TABLE Guests ADD COLUMN vip_tier TEXT NOT NULL DEFAULT 'Standard';")
+        if "notes" not in existing_cols:
+            cursor.execute("ALTER TABLE Guests ADD COLUMN notes TEXT DEFAULT '';")
 
     cursor.execute(
         """
@@ -1817,10 +1841,11 @@ def get_coupons(
 ):
     """Retrieves property discount coupons with validity dates and usage stats."""
     cursor = conn.cursor()
-    cursor.execute("PRAGMA table_info(Coupons);")
-    c_cols = {r[1] for r in cursor.fetchall()}
-    if not c_cols:
-        return []
+    if not IS_POSTGRES:
+        cursor.execute("PRAGMA table_info(Coupons);")
+        c_cols = {r[1] for r in cursor.fetchall()}
+        if not c_cols:
+            return []
 
     query = "SELECT * FROM Coupons"
     params = []

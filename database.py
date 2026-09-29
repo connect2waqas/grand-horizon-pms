@@ -389,26 +389,31 @@ def record_audit_log(
         details_str = str(details) if details is not None else ""
 
     cursor = conn.cursor()
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS AuditLogs (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        action TEXT NOT NULL,
-        entity_type TEXT NOT NULL,
-        entity_id INTEGER,
-        actor TEXT NOT NULL DEFAULT 'Front Desk Agent',
-        details TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );
-    """)
-    cursor.execute(
-        """
-        INSERT INTO AuditLogs (action, entity_type, entity_id, actor, details)
-        VALUES (?, ?, ?, ?, ?);
-        """,
-        (action, entity_type, entity_id, actor, details_str),
-    )
-    return cursor.lastrowid
+    if not IS_POSTGRES:
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS AuditLogs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            action TEXT NOT NULL,
+            entity_type TEXT NOT NULL,
+            entity_id INTEGER,
+            actor TEXT NOT NULL DEFAULT 'Front Desk Agent',
+            details TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        """)
+    try:
+        cursor.execute(
+            """
+            INSERT INTO AuditLogs (action, entity_type, entity_id, actor, details)
+            VALUES (?, ?, ?, ?, ?);
+            """,
+            (action, entity_type, entity_id, actor, details_str),
+        )
+        return cursor.lastrowid or 0
+    except Exception as exc:
+        print(f"Audit log insertion notice: {exc}")
+        return 0
 
 
 

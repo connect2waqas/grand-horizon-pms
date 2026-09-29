@@ -2792,7 +2792,12 @@ def void_folio_charge(
     )
 
 
-# Ensure static directory exists and mount it to serve dashboard assets
-STATIC_DIR.mkdir(parents=True, exist_ok=True)
-app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="static")
+# Mount static files if directory exists (local development fallback)
+# On Vercel, static assets are served directly from /public via edge CDN
+if STATIC_DIR.exists():
+    try:
+        app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+        app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="static_root")
+    except Exception as e:
+        print(f"StaticFiles mounting skipped: {e}")
 

@@ -37,11 +37,10 @@ IS_POSTGRES = DATABASE_URL.startswith("postgresql")
 # Initialize central SQLAlchemy Engine
 if IS_POSTGRES:
     import psycopg2.extras
+    from sqlalchemy.pool import NullPool
     engine = create_engine(
         DATABASE_URL,
-        pool_pre_ping=True,
-        pool_size=10,
-        max_overflow=20,
+        poolclass=NullPool,
     )
 else:
     engine = create_engine(

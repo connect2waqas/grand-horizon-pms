@@ -1013,7 +1013,7 @@ async function handleBookingSubmit(event) {
 
     // Success! Show receipt modal and refresh stats & rooms & front desk table
     showBookingReceipt(data);
-    showToast("Reservation successfully confirmed!", "success");
+    showToast("Reservation Confirmed.", "success");
     fetchKPIs();
     fetchRooms();
     fetchBookings();
@@ -1080,15 +1080,29 @@ function setSubmitting(isSubmitting) {
 }
 
 function showToast(message, type = "info") {
+  if (!toastContainer) return;
   const toast = document.createElement("div");
   toast.className = `toast toast-${type}`;
-  toast.innerHTML = `<p style="margin: 0; font-weight: 500;">${message}</p>`;
+
+  let iconSvg = '';
+  if (type === "success") {
+    iconSvg = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--status-available-text); flex-shrink: 0; margin-top: 1px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>`;
+  } else if (type === "error") {
+    iconSvg = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--status-error-text); flex-shrink: 0; margin-top: 1px;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>`;
+  } else {
+    iconSvg = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--brand-primary); flex-shrink: 0; margin-top: 1px;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>`;
+  }
+
+  toast.innerHTML = `
+    ${iconSvg}
+    <div style="flex: 1; font-weight: 500; line-height: 1.4;">${message}</div>
+  `;
   toastContainer.appendChild(toast);
 
   setTimeout(() => {
     toast.style.opacity = "0";
-    toast.style.transform = "translateY(8px)";
-    toast.style.transition = "all 0.2s ease";
+    toast.style.transform = "translateX(20px)";
+    toast.style.transition = "all 0.25s ease";
     setTimeout(() => toast.remove(), 250);
   }, 4000);
 }

@@ -23,31 +23,36 @@ load_dotenv()
 BASE_DIR = Path(__file__).resolve().parent
 DATABASE_PATH = BASE_DIR / "hotel_management.db"
 
-# Read DATABASE_URL environment variable (Supabase PostgreSQL / Cloud)
-DATABASE_URL = os.getenv("DATABASE_URL")
-if not DATABASE_URL:
-    DATABASE_URL = f"sqlite:///{DATABASE_PATH}"
+# Database URL and Engine configuration
+def get_database_url() -> str:
+    url = os.getenv("DATABASE_URL")
+    if not url:
+        return f"sqlite:///{DATABASE_PATH}"
+    if url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql://", 1)
+    return url
 
-# Normalize legacy postgres:// protocol to postgresql:// for SQLAlchemy compatibility
-if DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+IS_POSTGRES = bool(os.getenv("DATABASE_URL", "").startswith(("postgresql", "postgres")))
 
-IS_POSTGRES = DATABASE_URL.startswith("postgresql")
+_engine = None
 
-# Initialize central SQLAlchemy Engine
-if IS_POSTGRES:
-    import psycopg2.extras
-    from sqlalchemy.pool import NullPool
-    engine = create_engine(
-        DATABASE_URL,
-        poolclass=NullPool,
-    )
-else:
-    engine = create_engine(
-        DATABASE_URL,
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
+def get_engine():
+    global _engine
+    if _engine is not None:
+        return _engine
+
+    url = get_database_url()
+    if url.startswith("postgresql"):
+        import psycopg2.extras
+        from sqlalchemy.pool import NullPool
+        _engine = create_engine(url, poolclass=NullPool)
+    else:
+        _engine = create_engine(
+            url,
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
+    return _engine
 
 
 class PostgresCursorWrapper:
@@ -145,7 +150,7 @@ def get_db_connection():
     - If SQLite (Local Development): Connects with row_factory=sqlite3.Row and PRAGMA foreign_keys=ON.
     """
     if IS_POSTGRES:
-        conn = engine.raw_connection()
+        conn = get_engine().raw_connection()
         return PostgresConnectionWrapper(conn)
     else:
         conn = sqlite3.connect(DATABASE_PATH, check_same_thread=False)

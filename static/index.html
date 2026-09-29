@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Grand Horizon Hotel | Reservation & Management Dashboard</title>
+  <meta name="description" content="Modern enterprise Hotel Management System dashboard for room inventory and real-time reservations.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Enterprise SaaS Header -->
+  <header class="app-header">
+    <div class="header-container">
+      <div class="brand">
+        <div class="brand-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 21h18M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16M9 9h1m4 0h1m-6 4h1m4 0h1m-6 4h1m4 0h1"/>
+          </svg>
+        </div>
+        <div class="brand-meta">
+          <span class="brand-title">Grand Horizon</span>
+          <span class="brand-subtitle">Suite & Inventory Management</span>
+        </div>
+      </div>
+      <div class="header-actions">
+        <span class="status-badge" id="apiStatusBadge">
+          <span class="status-dot"></span>
+          <span>FastAPI Connected</span>
+        </span>
+        <a href="/docs" target="_blank" class="nav-link" title="Open Swagger API documentation">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="16" y1="13" x2="8" y2="13"></line>
+            <line x1="16" y1="17" x2="8" y2="17"></line>
+          </svg>
+          API Docs
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Notification Toast Container -->
+  <div id="toastContainer" class="toast-container" aria-live="polite"></div>
+
+  <!-- Main Dashboard Canvas -->
+  <main class="dashboard-canvas">
+    
+    <!-- Top-Level Executive KPI Bar -->
+    <section class="kpi-grid" aria-label="Key Performance Indicators">
+      <div class="kpi-card">
+        <div class="kpi-header">
+          <span class="kpi-title">Total Rooms</span>
+          <div class="kpi-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 21h18M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16M9 9h1m4 0h1m-6 4h1m4 0h1"/>
+            </svg>
+          </div>
+        </div>
+        <div class="kpi-value" id="kpiTotalRooms">—</div>
+        <span class="kpi-trend" id="kpiInventorySub">Registered inventory</span>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-header">
+          <span class="kpi-title">Occupancy Rate</span>
+          <div class="kpi-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 20V10M12 20V4M6 20v-6"/>
+            </svg>
+          </div>
+        </div>
+        <div class="kpi-value" id="kpiOccupancy">—</div>
+        <span class="kpi-trend text-emerald" id="kpiAdrRevpar">ADR: — • RevPAR: —</span>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-header">
+          <span class="kpi-title">Today's Check-ins</span>
+          <div class="kpi-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+              <line x1="16" y1="2" x2="16" y2="6"></line>
+              <line x1="8" y1="2" x2="8" y2="6"></line>
+              <line x1="3" y1="10" x2="21" y2="10"></line>
+            </svg>
+          </div>
+        </div>
+        <div class="kpi-value" id="kpiCheckins">—</div>
+        <span class="kpi-trend text-indigo" id="kpiTurnoverSub">Scheduled arrivals</span>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-header">
+          <span class="kpi-title">Est. Revenue</span>
+          <div class="kpi-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="12" y1="1" x2="12" y2="23"></line>
+              <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+            </svg>
+          </div>
+        </div>
+        <div class="kpi-value" id="kpiRevenue">—</div>
+        <span class="kpi-trend text-indigo" id="kpiMonthlyRev">Confirmed bookings</span>
+      </div>
+    </section>
+
+    <!-- Content Row: Left Catalog & Right Form -->
+    <div class="dashboard-body">
+      
+      <!-- Left Section: Room Inventory Grid -->
+      <section class="inventory-section">
+        <div class="section-heading">
+          <div class="heading-text">
+            <h1 class="section-title">Rooms & Availability</h1>
+            <p class="section-subtitle">Real-time room availability powered by FastAPI and SQLite.</p>
+          </div>
+          <button id="refreshRoomsBtn" class="btn btn-secondary btn-icon" title="Refresh Room Catalog">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="23 4 23 10 17 10"></polyline>
+              <polyline points="1 20 1 14 7 14"></polyline>
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+            </svg>
+            Refresh Catalog
+          </button>
+        </div>
+
+        <!-- Filter Toolbar with Instant Reactive Category Filter -->
+        <div class="filter-toolbar">
+          <div class="filter-field">
+            <label for="filterCheckIn">Check-In</label>
+            <input type="date" id="filterCheckIn" name="filterCheckIn">
+          </div>
+          <div class="filter-field">
+            <label for="filterCheckOut">Check-Out</label>
+            <input type="date" id="filterCheckOut" name="filterCheckOut">
+          </div>
+          <div class="filter-field">
+            <label for="filterType">Room Category</label>
+            <select id="filterType" name="filterType">
+              <option value="">All Categories</option>
+              <option value="Single">Single</option>
+              <option value="Double">Double</option>
+              <option value="Family Suite">Family Suite</option>
+            </select>
+          </div>
+          <div class="filter-field filter-field-checkbox">
+            <label for="filterMaintenance" class="checkbox-label">
+              <input type="checkbox" id="filterMaintenance" name="filterMaintenance">
+              <span>Show Maintenance</span>
+            </label>
+          </div>
+          <div class="filter-cta-group">
+            <button id="applyFilterBtn" class="btn btn-secondary">Filter Dates</button>
+            <button id="resetFilterBtn" class="btn btn-ghost">Reset</button>
+          </div>
+        </div>
+
+        <!-- State: Loading -->
+        <div id="loadingState" class="state-placeholder hidden">
+          <div class="spinner"></div>
+          <p>Loading available rooms...</p>
+        </div>
+
+        <!-- State: Empty -->
+        <div id="emptyState" class="state-placeholder hidden">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="8" y1="12" x2="16" y2="12"></line>
+          </svg>
+          <p class="state-title">No Rooms Found</p>
+          <p class="state-desc">No rooms match your selected category or date criteria.</p>
+        </div>
+
+        <!-- Responsive Rooms Grid -->
+        <div id="roomsGrid" class="rooms-grid"></div>
+      </section>
+
+      <!-- Right Section: Reservation Form (Streamlined, No Redundant Dropdown) -->
+      <aside class="booking-section">
+        <div class="booking-panel">
+          <div class="panel-header">
+            <h2 class="panel-title">Book a Reservation</h2>
+            <p class="panel-subtitle">Click "Select Room" on any available card to target it.</p>
+          </div>
+
+          <form id="bookingForm" class="booking-form" novalidate>
+            
+            <!-- Streamlined Target Room Banner (Replaces redundant dropdown) -->
+            <div class="form-control">
+              <label>Target Accommodation <span class="required">*</span></label>
+              <div class="selected-room-banner" id="selectedRoomBanner">
+                <div class="selected-room-header">
+                  <span class="selected-room-pill" id="selectedRoomPill">None</span>
+                  <span class="selected-room-name" id="selectedRoomName">Select an Available Room</span>
+                </div>
+                <div class="selected-room-rate" id="selectedRoomRate">—</div>
+              </div>
+              <input type="hidden" id="selectedRoomId" name="room_id" required>
+            </div>
+
+            <!-- Stay Dates -->
+            <div class="form-row">
+              <div class="form-control">
+                <label for="bookingCheckIn">Check-In <span class="required">*</span></label>
+                <input type="date" id="bookingCheckIn" name="check_in_date" required>
+              </div>
+              <div class="form-control">
+                <label for="bookingCheckOut">Check-Out <span class="required">*</span></label>
+                <input type="date" id="bookingCheckOut" name="check_out_date" required>
+              </div>
+            </div>
+
+            <!-- Guest Personal Details -->
+            <div class="form-row">
+              <div class="form-control">
+                <label for="guestFirstName">First Name <span class="required">*</span></label>
+                <input type="text" id="guestFirstName" name="first_name" placeholder="Alexander" required>
+              </div>
+              <div class="form-control">
+                <label for="guestLastName">Last Name <span class="required">*</span></label>
+                <input type="text" id="guestLastName" name="last_name" placeholder="Wright" required>
+              </div>
+            </div>
+
+            <div class="form-control">
+              <label for="guestEmail">Email Address <span class="required">*</span></label>
+              <input type="email" id="guestEmail" name="email" placeholder="alexander.wright@company.com" required>
+            </div>
+
+            <div class="form-control">
+              <label for="guestPhone">Phone Number <span class="required">*</span></label>
+              <input type="tel" id="guestPhone" name="phone" placeholder="+1 (555) 018-9281" required>
+            </div>
+
+            <!-- Module 11: Promotional Coupon & Dynamic Pricing Engine -->
+            <div class="form-control" style="margin-top: 6px;">
+              <label for="couponCodeInput">Promotional Coupon / Voucher</label>
+              <div class="coupon-input-group">
+                <input type="text" id="couponCodeInput" placeholder="Code (e.g. WELCOME10)" style="text-transform: uppercase;">
+                <button type="button" id="btnApplyCoupon" class="btn btn-secondary">Apply</button>
+              </div>
+              <div id="couponStatusMessage" class="coupon-status-msg hidden"></div>
+              
+              <!-- Quick promo code chips -->
+              <div class="promo-chips-wrapper">
+                <span class="promo-chips-label">Available:</span>
+                <button type="button" class="promo-chip" data-code="WELCOME10">WELCOME10 (10% off)</button>
+                <button type="button" class="promo-chip" data-code="HORIZON25">HORIZON25 ($25 off)</button>
+                <button type="button" class="promo-chip" data-code="VIP50">VIP50 ($50 off)</button>
+              </div>
+            </div>
+
+            <!-- Dynamic Pricing Options -->
+            <div class="form-control filter-field-checkbox" style="margin-top: 4px;">
+              <label for="toggleDynamicPricing" class="checkbox-label">
+                <input type="checkbox" id="toggleDynamicPricing" checked>
+                <span>Apply Smart Dynamic Rates (Weekend surges & Length-of-Stay discounts)</span>
+              </label>
+            </div>
+
+            <!-- Price Calculation Breakdown -->
+            <div id="priceEstimateCard" class="estimate-panel">
+              <div class="estimate-header">
+                <span class="estimate-label">Total Estimate</span>
+                <span id="estimateTotal" class="estimate-amount">$0.00</span>
+              </div>
+              <div id="quoteBreakdownContainer" class="quote-breakdown-container hidden">
+                <!-- Dynamically rendered quotation breakdown -->
+              </div>
+              <div class="estimate-meta">
+                <span id="rateCalculation" class="estimate-rate">Select room & dates</span>
+                <span class="estimate-policy" id="pricingEngineStatus">Smart Dynamic Pricing</span>
+              </div>
+            </div>
+
+            <!-- Submit CTA Button -->
+            <button type="submit" id="submitBookingBtn" class="btn btn-primary btn-block">
+              <span class="btn-text">Confirm Reservation</span>
+              <span class="btn-spinner hidden"></span>
+            </button>
+          </form>
+        </div>
+      </aside>
+
+    </div>
+
+    <!-- Front Desk & Reservations Lifecycle Section -->
+    <section class="reservations-section" aria-label="Front Desk Reservations">
+      <div class="section-heading">
+        <div class="heading-text">
+          <h2 class="section-title">Front Desk & Reservations</h2>
+          <p class="section-subtitle">Real-time guest lifecycle management: arrivals, check-out folios, and cancellations.</p>
+        </div>
+        <div class="reservations-filter-tabs" id="bookingFilterTabs">
+          <button class="tab-btn active" data-status="">All</button>
+          <button class="tab-btn" data-status="Confirmed">Confirmed</button>
+          <button class="tab-btn" data-status="Checked-in">Checked-In</button>
+          <button class="tab-btn" data-status="Checked-out">Checked-Out</button>
+          <button class="tab-btn" data-status="Cancelled">Cancelled</button>
+        </div>
+      </div>
+
+      <div class="reservations-table-wrapper">
+        <table class="reservations-table" id="reservationsTable">
+          <thead>
+            <tr>
+              <th>Folio #</th>
+              <th>Guest Name</th>
+              <th>Room</th>
+              <th>Stay Period</th>
+              <th>Total Bill</th>
+              <th>Status</th>
+              <th>Lifecycle Actions</th>
+            </tr>
+          </thead>
+          <tbody id="reservationsTableBody">
+            <!-- Dynamically populated by app.js -->
+          </tbody>
+        </table>
+        <div id="reservationsEmpty" class="state-placeholder hidden">
+          <p>No reservations found matching the selected status.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Module 10: Guest Directory & Loyalty CRM -->
+    <section class="crm-section" id="guestCrmSection">
+      <div class="reservations-header">
+        <div>
+          <h2 class="panel-title">Guest Directory & Loyalty CRM</h2>
+          <p class="panel-subtitle">Customer lifetime value, loyalty tiers, stay histories, and guest preferences.</p>
+        </div>
+        <div class="crm-controls-group">
+          <div class="crm-search-wrapper">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input type="text" id="guestSearchInput" placeholder="Search by name, email, or phone..." aria-label="Search Guests">
+          </div>
+          <div class="reservations-filter-tabs" id="guestTierTabs">
+            <button class="tab-btn active" data-tier="">All Tiers</button>
+            <button class="tab-btn" data-tier="Standard">Standard</button>
+            <button class="tab-btn" data-tier="Silver">Silver</button>
+            <button class="tab-btn" data-tier="Gold">Gold</button>
+            <button class="tab-btn" data-tier="Platinum">Platinum</button>
+          </div>
+          <button id="btnOpenNewGuestModal" class="btn btn-secondary btn-new-guest">+ New Guest</button>
+        </div>
+      </div>
+
+      <div class="reservations-table-wrapper">
+        <table class="reservations-table" id="guestsTable">
+          <thead>
+            <tr>
+              <th>Guest</th>
+              <th>Contact Details</th>
+              <th>VIP Tier</th>
+              <th>Stays (Done/All)</th>
+              <th>Lifetime Spend</th>
+              <th>Preferences / Notes</th>
+              <th>CRM Actions</th>
+            </tr>
+          </thead>
+          <tbody id="guestsTableBody">
+            <!-- Dynamically populated by app.js -->
+          </tbody>
+        </table>
+        <div id="guestsEmpty" class="state-placeholder hidden">
+          <p>No guest profiles match the current filter or search criteria.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Module 12: Operations Audit Trail & Compliance Ledger -->
+    <section class="audit-section" id="auditLedgerSection" aria-label="Operations Audit Trail">
+      <div class="reservations-header">
+        <div>
+          <h2 class="panel-title">Operations Audit Trail & Compliance Ledger</h2>
+          <p class="panel-subtitle">Immutable timeline of front desk actions, room mutations, guest updates, and system folios.</p>
+        </div>
+        <div class="crm-controls-group">
+          <div class="reservations-filter-tabs" id="auditEntityTabs">
+            <button class="tab-btn active" data-entity="">All Activity</button>
+            <button class="tab-btn" data-entity="Room">Rooms</button>
+            <button class="tab-btn" data-entity="Booking">Reservations</button>
+            <button class="tab-btn" data-entity="Guest">Guests</button>
+            <button class="tab-btn" data-entity="Coupon">Coupons</button>
+          </div>
+          <button id="btnRefreshAuditLogs" class="btn btn-secondary btn-icon-only" title="Refresh Audit Log">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M23 4v6h-6"></path>
+              <path d="M1 20v-6h6"></path>
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="reservations-table-wrapper">
+        <table class="reservations-table" id="auditLogsTable">
+          <thead>
+            <tr>
+              <th style="width: 140px;">Timestamp</th>
+              <th style="width: 170px;">Action Code</th>
+              <th style="width: 110px;">Target Entity</th>
+              <th style="width: 130px;">Operator</th>
+              <th>Audit Payload / Event Details</th>
+            </tr>
+          </thead>
+          <tbody id="auditLogsTableBody">
+            <!-- Dynamically populated by app.js -->
+          </tbody>
+        </table>
+        <div id="auditLogsEmpty" class="state-placeholder hidden">
+          <p>No audit activity events recorded matching the current filter.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Module 13: Maintenance Work Orders & Housekeeping Dispatch -->
+    <section class="maintenance-section" id="maintenanceSection" aria-label="Maintenance Work Orders">
+      <div class="reservations-header">
+        <div>
+          <h2 class="panel-title">Facilities & Maintenance Work Orders</h2>
+          <p class="panel-subtitle">Room repairs, trade dispatching, priority queues, and automatic turnover locking.</p>
+        </div>
+        <div class="crm-controls-group">
+          <!-- Summary chips -->
+          <div class="maintenance-kpis-wrapper">
+            <span class="m-kpi-chip"><strong id="mKpiOpen">0</strong> Open</span>
+            <span class="m-kpi-chip"><strong id="mKpiProgress">0</strong> In Progress</span>
+            <span class="m-kpi-chip m-kpi-urgent"><strong id="mKpiUrgent">0</strong> Urgent</span>
+            <span class="m-kpi-chip"><strong id="mKpiResolved">0</strong> Resolved</span>
+          </div>
+
+          <div class="reservations-filter-tabs" id="maintenanceStatusTabs">
+            <button class="tab-btn active" data-status="">All</button>
+            <button class="tab-btn" data-status="Open">Open</button>
+            <button class="tab-btn" data-status="In Progress">In Progress</button>
+            <button class="tab-btn" data-status="Resolved">Resolved</button>
+          </div>
+          <button id="btnOpenNewTicketModal" class="btn btn-primary" style="font-size: 12px; padding: 7px 14px;">+ Dispatch Work Order</button>
+        </div>
+      </div>
+
+      <div class="reservations-table-wrapper">
+        <table class="reservations-table" id="maintenanceTable">
+          <thead>
+            <tr>
+              <th style="width: 80px;">WO #</th>
+              <th style="width: 120px;">Room</th>
+              <th>Issue Description</th>
+              <th style="width: 110px;">Trade</th>
+              <th style="width: 100px;">Priority</th>
+              <th style="width: 140px;">Assigned Tech</th>
+              <th style="width: 110px;">Status</th>
+              <th style="width: 150px;">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="maintenanceTableBody">
+            <!-- Dynamically populated by app.js -->
+          </tbody>
+        </table>
+        <div id="maintenanceEmpty" class="state-placeholder hidden">
+          <p>No maintenance work orders found matching the filter.</p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Reservation Receipt Modal -->
+  <div id="receiptModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-icon-badge">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+        </div>
+        <h3 class="modal-title">Booking Confirmed</h3>
+        <p class="modal-subtitle">The reservation record has been committed to the database.</p>
+      </div>
+      <div class="modal-body" id="modalDetails"></div>
+      <div class="modal-footer">
+        <button id="closeModalBtn" class="btn btn-secondary btn-block">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Checkout Invoice Folio Modal -->
+  <div id="invoiceModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+    <div class="modal-card modal-card-wide">
+      <div class="modal-header">
+        <div class="modal-icon-badge icon-indigo">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="16" y1="13" x2="8" y2="13"></line>
+            <line x1="16" y1="17" x2="8" y2="17"></line>
+          </svg>
+        </div>
+        <h3 class="modal-title">Guest Checkout Statement</h3>
+        <p class="modal-subtitle" id="invoiceSubtitle">Official folio statement & breakdown</p>
+      </div>
+      <div class="modal-body" id="invoiceDetails"></div>
+      <div class="modal-footer">
+        <button id="closeInvoiceBtn" class="btn btn-secondary btn-block">Close Statement</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Module 10: Guest CRM Profile & Stay History Modal -->
+  <div id="guestDetailModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+    <div class="modal-card modal-card-wide">
+      <div class="modal-header">
+        <div class="modal-icon-badge icon-amber">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+            <circle cx="12" cy="7" r="4"></circle>
+          </svg>
+        </div>
+        <h3 class="modal-title" id="guestDetailModalTitle">Guest CRM Profile</h3>
+        <p class="modal-subtitle" id="guestDetailModalSubtitle">Lifetime statistics and stay folios</p>
+      </div>
+      <div class="modal-body" id="guestDetailBody">
+        <!-- Rendered by app.js -->
+      </div>
+      <div class="modal-footer">
+        <button id="closeGuestDetailBtn" class="btn btn-secondary btn-block">Close Profile</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Module 10: Quick Register New Guest Modal -->
+  <div id="newGuestModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-icon-badge">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+            <circle cx="8.5" cy="7" r="4"></circle>
+            <line x1="20" y1="8" x2="20" y2="14"></line>
+            <line x1="23" y1="11" x2="17" y2="11"></line>
+          </svg>
+        </div>
+        <h3 class="modal-title">Register New Guest Profile</h3>
+        <p class="modal-subtitle">Enroll guest into CRM loyalty directory</p>
+      </div>
+      <form id="newGuestForm" class="booking-form" novalidate style="padding: 16px 20px;">
+        <div class="form-row">
+          <div class="form-control">
+            <label for="newGuestFirstName">First Name <span class="required">*</span></label>
+            <input type="text" id="newGuestFirstName" required placeholder="Elena">
+          </div>
+          <div class="form-control">
+            <label for="newGuestLastName">Last Name <span class="required">*</span></label>
+            <input type="text" id="newGuestLastName" required placeholder="Rostova">
+          </div>
+        </div>
+        <div class="form-control">
+          <label for="newGuestEmail">Email Address <span class="required">*</span></label>
+          <input type="email" id="newGuestEmail" required placeholder="elena.rostova@travel.com">
+        </div>
+        <div class="form-row">
+          <div class="form-control">
+            <label for="newGuestPhone">Phone <span class="required">*</span></label>
+            <input type="tel" id="newGuestPhone" required placeholder="+1-555-8921">
+          </div>
+          <div class="form-control">
+            <label for="newGuestTier">Initial VIP Tier</label>
+            <select id="newGuestTier" class="form-select">
+              <option value="Standard">Standard</option>
+              <option value="Silver">Silver</option>
+              <option value="Gold">Gold</option>
+              <option value="Platinum">Platinum</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-control">
+          <label for="newGuestNotes">Preferences & Requests</label>
+          <textarea id="newGuestNotes" rows="2" class="form-textarea" placeholder="E.g., High floor, foam pillows, vegan breakfast"></textarea>
+        </div>
+        <div class="modal-footer" style="padding: 12px 0 0; border-top: none;">
+          <button type="submit" id="btnSubmitNewGuest" class="btn btn-primary btn-block">Enroll Guest</button>
+          <button type="button" id="btnCancelNewGuest" class="btn btn-ghost btn-block">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Module 13: Dispatch New Maintenance Work Order Modal -->
+  <div id="newTicketModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-icon-badge icon-indigo">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path>
+          </svg>
+        </div>
+        <h3 class="modal-title">Dispatch Maintenance Work Order</h3>
+        <p class="modal-subtitle">Log room defect and dispatch facilities personnel</p>
+      </div>
+      <form id="newTicketForm" class="booking-form" novalidate style="padding: 16px 20px;">
+        <div class="form-row">
+          <div class="form-control">
+            <label for="ticketRoomSelect">Target Room <span class="required">*</span></label>
+            <select id="ticketRoomSelect" class="form-select" required>
+              <!-- Populated by app.js -->
+            </select>
+          </div>
+          <div class="form-control">
+            <label for="ticketCategorySelect">Trade Category <span class="required">*</span></label>
+            <select id="ticketCategorySelect" class="form-select" required>
+              <option value="Plumbing">Plumbing</option>
+              <option value="Electrical">Electrical</option>
+              <option value="HVAC" selected>HVAC</option>
+              <option value="Furniture">Furniture</option>
+              <option value="Sanitization">Sanitization</option>
+              <option value="Structural">Structural</option>
+              <option value="General">General</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-control">
+            <label for="ticketPrioritySelect">Urgency Priority <span class="required">*</span></label>
+            <select id="ticketPrioritySelect" class="form-select" required>
+              <option value="Low">Low (Routine Check)</option>
+              <option value="Medium" selected>Medium (Standard Service)</option>
+              <option value="High">High (Immediate Shift Attention)</option>
+              <option value="Urgent">Urgent (Room Out-of-Order Lock)</option>
+            </select>
+          </div>
+          <div class="form-control">
+            <label for="ticketEstimatedCost">Est. Cost ($)</label>
+            <input type="number" id="ticketEstimatedCost" step="5" min="0" value="50.0">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-control">
+            <label for="ticketAssignedStaff">Assigned Technician</label>
+            <input type="text" id="ticketAssignedStaff" placeholder="Facilities Team" value="Facilities Team">
+          </div>
+          <div class="form-control">
+            <label for="ticketReportedBy">Reported By</label>
+            <input type="text" id="ticketReportedBy" placeholder="Housekeeping" value="Housekeeping">
+          </div>
+        </div>
+
+        <div class="form-control">
+          <label for="ticketDescription">Defect Description <span class="required">*</span></label>
+          <textarea id="ticketDescription" rows="3" class="form-textarea" required placeholder="Describe issue in detail (e.g. bathroom faucet dripping, AC condenser loud)"></textarea>
+        </div>
+
+        <div class="form-control filter-field-checkbox" style="margin-top: 6px;">
+          <label for="ticketAutoLock" class="checkbox-label">
+            <input type="checkbox" id="ticketAutoLock" checked>
+            <span>Lock room into Maintenance status if High or Urgent priority</span>
+          </label>
+        </div>
+
+        <div class="modal-footer" style="padding: 12px 0 0; border-top: none;">
+          <button type="submit" id="btnSubmitNewTicket" class="btn btn-primary btn-block">Dispatch Work Order</button>
+          <button type="button" id="btnCancelNewTicket" class="btn btn-ghost btn-block">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Module 13: Resolve Maintenance Work Order Modal -->
+  <div id="resolveTicketModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-icon-badge icon-indigo">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+            <polyline points="22 4 12 14.01 9 11.01"></polyline>
+          </svg>
+        </div>
+        <h3 class="modal-title" id="resolveModalTitle">Complete & Clear Work Order</h3>
+        <p class="modal-subtitle" id="resolveModalSubtitle">Document repair resolution</p>
+      </div>
+      <form id="resolveTicketForm" class="booking-form" novalidate style="padding: 16px 20px;">
+        <input type="hidden" id="resolveTicketId">
+        <div class="form-control">
+          <label for="resolveNotes">Resolution Notes & Parts Replaced <span class="required">*</span></label>
+          <textarea id="resolveNotes" rows="3" class="form-textarea" required placeholder="E.g., Replaced gasket valve, inspected pressure, tested cooling cycle..."></textarea>
+        </div>
+        <div class="form-control filter-field-checkbox" style="margin-top: 6px;">
+          <label for="resolveAutoRelease" class="checkbox-label">
+            <input type="checkbox" id="resolveAutoRelease" checked>
+            <span>Auto-transition room to "Cleaning" for housekeeping sanitization</span>
+          </label>
+        </div>
+        <div class="modal-footer" style="padding: 12px 0 0; border-top: none;">
+          <button type="submit" id="btnSubmitResolveTicket" class="btn btn-primary btn-block">Confirm Resolution</button>
+          <button type="button" id="btnCancelResolveTicket" class="btn btn-ghost btn-block">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Module 14: Guest Folio & Incidentals Statement Modal -->
+  <div id="folioModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+    <div class="modal-card modal-lg">
+      <div class="modal-header">
+        <div class="modal-icon-badge icon-amber">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="16" y1="13" x2="8" y2="13"></line>
+            <line x1="16" y1="17" x2="8" y2="17"></line>
+            <polyline points="10 9 9 9 8 9"></polyline>
+          </svg>
+        </div>
+        <div style="flex: 1;">
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <h3 class="modal-title" id="folioModalTitle">Guest Folio & Incidentals Billing</h3>
+            <span id="folioStatusBadge" class="status-badge status-available">Confirmed</span>
+          </div>
+          <p class="modal-subtitle" id="folioModalSubtitle">Loading folio details...</p>
+        </div>
+      </div>
+
+      <div style="padding: 16px 24px; max-height: 75vh; overflow-y: auto;">
+        <!-- Top Metrics Breakdown -->
+        <div class="folio-summary-grid">
+          <div class="folio-summary-card">
+            <span class="folio-card-label">Room Nights</span>
+            <span class="folio-card-value" id="folioRoomBase">$0.00</span>
+          </div>
+          <div class="folio-summary-card">
+            <span class="folio-card-label">Add-on Amenities</span>
+            <span class="folio-card-value" id="folioAmenities">$0.00</span>
+          </div>
+          <div class="folio-summary-card">
+            <span class="folio-card-label">Promos & Discounts</span>
+            <span class="folio-card-value discount-text" id="folioDiscount">-$0.00</span>
+          </div>
+          <div class="folio-summary-card">
+            <span class="folio-card-label">Incidentals Total</span>
+            <span class="folio-card-value" id="folioIncidentalsTotal">$0.00</span>
+          </div>
+          <div class="folio-summary-card folio-balance-card">
+            <span class="folio-card-label">Outstanding Balance Due</span>
+            <span class="folio-card-value balance-value" id="folioBalanceDue">$0.00</span>
+          </div>
+        </div>
+
+        <!-- Post New Incidental Charge Section -->
+        <div class="folio-charge-form-box" id="folioPostChargeContainer">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <h4 style="font-size: 13px; font-weight: 700; color: var(--text-high-contrast); text-transform: uppercase; letter-spacing: 0.04em;">
+              + Post Incidental / Room Service Charge
+            </h4>
+            <span style="font-size: 11px; color: var(--text-muted);">Quick Menu Presets</span>
+          </div>
+
+          <!-- Quick Presets -->
+          <div class="folio-presets-wrapper" id="folioPresetChips">
+            <button type="button" class="preset-pill" data-cat="Dining" data-desc="In-Room Dining: Executive Wagyu Burger & Truffle Fries" data-price="38.50">🍔 Wagyu Burger ($38.50)</button>
+            <button type="button" class="preset-pill" data-cat="Dining" data-desc="Continental Buffet Breakfast" data-price="24.99">🍳 Breakfast Buffet ($24.99)</button>
+            <button type="button" class="preset-pill" data-cat="Minibar" data-desc="Sparkling Italian Mineral Water (750ml)" data-price="8.00">💧 Sparkling Water ($8.00)</button>
+            <button type="button" class="preset-pill" data-cat="Minibar" data-desc="Artisan Roasted Nuts & Dark Chocolates" data-price="12.00">🍫 Minibar Snack ($12.00)</button>
+            <button type="button" class="preset-pill" data-cat="Parking" data-desc="Overnight Secured Valet Parking (Per Day)" data-price="25.00">🚗 Valet Parking ($25.00)</button>
+            <button type="button" class="preset-pill" data-cat="Spa" data-desc="60-Min Deep Tissue Therapeutic Massage" data-price="120.00">💆 Deep Tissue Massage ($120.00)</button>
+            <button type="button" class="preset-pill" data-cat="Laundry" data-desc="Same-Day Express Garment Pressing" data-price="16.00">👔 Garment Pressing ($16.00)</button>
+          </div>
+
+          <!-- Charge Form -->
+          <form id="folioChargeForm" novalidate style="margin-top: 10px;">
+            <input type="hidden" id="folioTargetBookingId">
+            <div class="form-row" style="grid-template-columns: 140px 1fr 100px 70px auto; gap: 8px; align-items: flex-end;">
+              <div class="form-control" style="margin-bottom: 0;">
+                <label for="chargeCategorySelect" style="font-size: 11px;">Category</label>
+                <select id="chargeCategorySelect" class="form-select" style="font-size: 12px; padding: 6px 8px;" required>
+                  <option value="Dining">Dining</option>
+                  <option value="Minibar">Minibar</option>
+                  <option value="Spa">Spa</option>
+                  <option value="Parking">Parking</option>
+                  <option value="Laundry">Laundry</option>
+                  <option value="Miscellaneous">Miscellaneous</option>
+                </select>
+              </div>
+
+              <div class="form-control" style="margin-bottom: 0;">
+                <label for="chargeDescInput" style="font-size: 11px;">Item Description</label>
+                <input type="text" id="chargeDescInput" placeholder="E.g. Room service, bottle of wine..." style="font-size: 12px; padding: 6px 10px;" required>
+              </div>
+
+              <div class="form-control" style="margin-bottom: 0;">
+                <label for="chargePriceInput" style="font-size: 11px;">Unit Price ($)</label>
+                <input type="number" id="chargePriceInput" step="0.5" min="0" placeholder="0.00" style="font-size: 12px; padding: 6px 8px;" required>
+              </div>
+
+              <div class="form-control" style="margin-bottom: 0;">
+                <label for="chargeQtyInput" style="font-size: 11px;">Qty</label>
+                <input type="number" id="chargeQtyInput" min="1" value="1" style="font-size: 12px; padding: 6px 8px;" required>
+              </div>
+
+              <div>
+                <button type="submit" id="btnSubmitCharge" class="btn btn-primary" style="font-size: 12px; padding: 7px 14px; white-space: nowrap;">Post Charge</button>
+              </div>
+            </div>
+          </form>
+        </div>
+
+        <!-- Incidentals Ledger Table -->
+        <div style="margin-top: 20px;">
+          <h4 style="font-size: 13px; font-weight: 700; color: var(--text-high-contrast); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 8px;">
+            Itemized Incidentals Ledger
+          </h4>
+          <div class="reservations-table-wrapper" style="max-height: 250px; overflow-y: auto;">
+            <table class="reservations-table" id="folioChargesTable">
+              <thead>
+                <tr>
+                  <th>Category</th>
+                  <th>Description</th>
+                  <th>Unit Price</th>
+                  <th>Qty</th>
+                  <th>Total</th>
+                  <th>Status</th>
+                  <th>Posted By</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="folioChargesTableBody">
+                <!-- Dynamically populated -->
+              </tbody>
+            </table>
+            <div id="folioEmptyState" class="state-placeholder hidden" style="padding: 20px;">
+              <p>No auxiliary charges posted to this folio.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer" style="padding: 14px 24px; border-top: 1px solid var(--border-subtle); display: flex; justify-content: flex-end;">
+        <button type="button" id="btnCloseFolioModal" class="btn btn-secondary">Close Folio</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

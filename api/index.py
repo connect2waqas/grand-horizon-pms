@@ -273,94 +273,116 @@ def get_kpi_analytics(conn: sqlite3.Connection = Depends(get_db)):
     - Daily Turnover: Today's arrivals and departures
     - Revenue Breakdown: Total confirmed revenue and current month revenue
     """
-    cursor = conn.cursor()
+    try:
+        cursor = conn.cursor()
 
-    # 1. Room Status Counts
-    cursor.execute("SELECT status, COUNT(*) FROM Rooms GROUP BY status;")
-    status_rows = cursor.fetchall()
-    status_counts = {r[0]: r[1] for r in status_rows}
-    total_rooms = sum(status_counts.values())
-    occupied_rooms = status_counts.get("Occupied", 0)
-    available_rooms = status_counts.get("Available", 0)
-    cleaning_rooms = status_counts.get("Cleaning", 0)
-    maintenance_rooms = status_counts.get("Maintenance", 0)
-    active_rooms = total_rooms - maintenance_rooms
+        # 1. Room Status Counts
+        cursor.execute("SELECT status, COUNT(*) as cnt FROM Rooms GROUP BY status;")
+        status_rows = cursor.fetchall()
+        status_counts = {}
+        for r in status_rows:
+            st = r["status"] if isinstance(r, dict) and "status" in r else r[0]
+            cnt = r["cnt"] if isinstance(r, dict) and "cnt" in r else r[1]
+            status_counts[st] = int(cnt)
 
-    # 2. Occupancy Rate
-    occupancy_rate = round((occupied_rooms / active_rooms * 100), 2) if active_rooms > 0 else 0.0
-    occupancy_display = f"{occupancy_rate:.1f}%"
+        total_rooms = sum(status_counts.values())
+        occupied_rooms = status_counts.get("Occupied", 0)
+        available_rooms = status_counts.get("Available", 0)
+        cleaning_rooms = status_counts.get("Cleaning", 0)
+        maintenance_rooms = status_counts.get("Maintenance", 0)
+        active_rooms = total_rooms - maintenance_rooms
 
-    # 3. Estimated Daily Revenue & ADR (Average Daily Rate of occupied inventory)
-    cursor.execute(
-        "SELECT COALESCE(SUM(price_per_night), 0.0), COALESCE(AVG(price_per_night), 0.0) FROM Rooms WHERE status = 'Occupied';"
-    )
-    first_row = cursor.fetchone()
-    estimated_daily_revenue = round(float(first_row[0] or 0.0), 2)
-    adr = round(float(first_row[1] or 0.0), 2)
+        # 2. Occupancy Rate
+        occupancy_rate = round((occupied_rooms / active_rooms * 100), 2) if active_rooms > 0 else 0.0
+        occupancy_display = f"{occupancy_rate:.1f}%"
 
-    # 4. RevPAR (Revenue Per Available Room)
-    revpar = round(adr * (occupancy_rate / 100.0), 2)
-
-    # 5. Today's Arrivals and Departures
-    today_checkin_sql = "SELECT COUNT(*) FROM Bookings WHERE check_in_date = CURRENT_DATE AND booking_status != 'Cancelled';" if IS_POSTGRES else "SELECT COUNT(*) FROM Bookings WHERE check_in_date = date('now') AND booking_status != 'Cancelled';"
-    cursor.execute(today_checkin_sql)
-    today_checkins = int(cursor.fetchone()[0] or 0)
-
-    today_checkout_sql = "SELECT COUNT(*) FROM Bookings WHERE check_out_date = CURRENT_DATE AND booking_status != 'Cancelled';" if IS_POSTGRES else "SELECT COUNT(*) FROM Bookings WHERE check_out_date = date('now') AND booking_status != 'Cancelled';"
-    cursor.execute(today_checkout_sql)
-    today_checkouts = int(cursor.fetchone()[0] or 0)
-
-    # Ensure display reflects active stays spanning today if present
-    active_stays_sql = "SELECT COUNT(*) FROM Bookings WHERE check_in_date <= CURRENT_DATE AND check_out_date >= CURRENT_DATE AND booking_status != 'Cancelled';" if IS_POSTGRES else "SELECT COUNT(*) FROM Bookings WHERE check_in_date <= date('now') AND check_out_date >= date('now') AND booking_status != 'Cancelled';"
-    cursor.execute(active_stays_sql)
-    active_stays = int(cursor.fetchone()[0] or 0)
-    display_checkins = max(today_checkins, 1 if active_stays > 0 else 0)
-
-    # 6. Revenues (Total Confirmed and Current Month)
-    cursor.execute(
-        "SELECT COALESCE(SUM(total_price), 0.0) FROM Bookings WHERE booking_status != 'Cancelled';"
-    )
-    rev_row = cursor.fetchone()
-    total_revenue = round(float(rev_row[0] or 0.0), 2)
-
-    if IS_POSTGRES:
+        # 3. Estimated Daily Revenue & ADR (Average Daily Rate of occupied inventory)
         cursor.execute(
-            """
-            SELECT COALESCE(SUM(total_price), 0.0)
-            FROM Bookings
-            WHERE booking_status != 'Cancelled'
-              AND to_char(check_in_date, 'YYYY-MM') = to_char(CURRENT_DATE, 'YYYY-MM');
-            """
+            "SELECT COALESCE(SUM(price_per_night), 0.0) as est_daily_rev, COALESCE(AVG(price_per_night), 0.0) as avg_adr FROM Rooms WHERE status = 'Occupied';"
         )
-    else:
-        cursor.execute(
-            """
-            SELECT COALESCE(SUM(total_price), 0.0)
-            FROM Bookings
-            WHERE booking_status != 'Cancelled'
-              AND strftime('%Y-%m', check_in_date) = strftime('%Y-%m', 'now');
-            """
-        )
-    monthly_row = cursor.fetchone()
-    monthly_revenue = round(float(monthly_row[0] or 0.0), 2)
+        rev_calc_row = cursor.fetchone()
+        if rev_calc_row:
+            if isinstance(rev_calc_row, dict) and "est_daily_rev" in rev_calc_row:
+                estimated_daily_revenue = round(float(rev_calc_row["est_daily_rev"] or 0.0), 2)
+                adr = round(float(rev_calc_row["avg_adr"] or 0.0), 2)
+            else:
+                estimated_daily_revenue = round(float(rev_calc_row[0] or 0.0), 2)
+                adr = round(float(rev_calc_row[1] or 0.0), 2)
+        else:
+            estimated_daily_revenue = 0.0
+            adr = 0.0
 
-    return KPIAnalyticsResponse(
-        total_rooms=total_rooms,
-        active_rooms=active_rooms,
-        available_rooms=available_rooms,
-        occupied_rooms=occupied_rooms,
-        cleaning_rooms=cleaning_rooms,
-        maintenance_rooms=maintenance_rooms,
-        occupancy_rate=occupancy_rate,
-        occupancy_rate_display=occupancy_display,
-        estimated_daily_revenue=estimated_daily_revenue,
-        adr=adr,
-        revpar=revpar,
-        today_checkins=display_checkins,
-        today_checkouts=today_checkouts,
-        total_revenue=total_revenue,
-        monthly_revenue=monthly_revenue,
-    )
+        # 4. RevPAR (Revenue Per Available Room)
+        revpar = round(adr * (occupancy_rate / 100.0), 2)
+
+        # 5. Today's Arrivals and Departures
+        today_checkin_sql = "SELECT COUNT(*) as cnt FROM Bookings WHERE check_in_date = CURRENT_DATE AND booking_status != 'Cancelled';" if IS_POSTGRES else "SELECT COUNT(*) as cnt FROM Bookings WHERE check_in_date = date('now') AND booking_status != 'Cancelled';"
+        cursor.execute(today_checkin_sql)
+        row_cin = cursor.fetchone()
+        today_checkins = int(row_cin["cnt"] if isinstance(row_cin, dict) and "cnt" in row_cin else (row_cin[0] or 0))
+
+        today_checkout_sql = "SELECT COUNT(*) as cnt FROM Bookings WHERE check_out_date = CURRENT_DATE AND booking_status != 'Cancelled';" if IS_POSTGRES else "SELECT COUNT(*) as cnt FROM Bookings WHERE check_out_date = date('now') AND booking_status != 'Cancelled';"
+        cursor.execute(today_checkout_sql)
+        row_cout = cursor.fetchone()
+        today_checkouts = int(row_cout["cnt"] if isinstance(row_cout, dict) and "cnt" in row_cout else (row_cout[0] or 0))
+
+        # Ensure display reflects active stays spanning today if present
+        active_stays_sql = "SELECT COUNT(*) as cnt FROM Bookings WHERE check_in_date <= CURRENT_DATE AND check_out_date >= CURRENT_DATE AND booking_status != 'Cancelled';" if IS_POSTGRES else "SELECT COUNT(*) as cnt FROM Bookings WHERE check_in_date <= date('now') AND check_out_date >= date('now') AND booking_status != 'Cancelled';"
+        cursor.execute(active_stays_sql)
+        row_act = cursor.fetchone()
+        active_stays = int(row_act["cnt"] if isinstance(row_act, dict) and "cnt" in row_act else (row_act[0] or 0))
+        display_checkins = max(today_checkins, 1 if active_stays > 0 else 0)
+
+        # 6. Revenues (Total Confirmed and Current Month)
+        cursor.execute(
+            "SELECT COALESCE(SUM(total_price), 0.0) as total_rev FROM Bookings WHERE booking_status != 'Cancelled';"
+        )
+        rev_row = cursor.fetchone()
+        total_revenue = round(float(rev_row["total_rev"] if isinstance(rev_row, dict) and "total_rev" in rev_row else (rev_row[0] or 0.0)), 2)
+
+        if IS_POSTGRES:
+            cursor.execute(
+                """
+                SELECT COALESCE(SUM(total_price), 0.0) as monthly_rev
+                FROM Bookings
+                WHERE booking_status != 'Cancelled'
+                  AND to_char(check_in_date, 'YYYY-MM') = to_char(CURRENT_DATE, 'YYYY-MM');
+                """
+            )
+        else:
+            cursor.execute(
+                """
+                SELECT COALESCE(SUM(total_price), 0.0) as monthly_rev
+                FROM Bookings
+                WHERE booking_status != 'Cancelled'
+                  AND strftime('%Y-%m', check_in_date) = strftime('%Y-%m', 'now');
+                """
+            )
+        monthly_row = cursor.fetchone()
+        monthly_revenue = round(float(monthly_row["monthly_rev"] if isinstance(monthly_row, dict) and "monthly_rev" in monthly_row else (monthly_row[0] or 0.0)), 2)
+
+        return KPIAnalyticsResponse(
+            total_rooms=total_rooms,
+            active_rooms=active_rooms,
+            available_rooms=available_rooms,
+            occupied_rooms=occupied_rooms,
+            cleaning_rooms=cleaning_rooms,
+            maintenance_rooms=maintenance_rooms,
+            occupancy_rate=occupancy_rate,
+            occupancy_rate_display=occupancy_display,
+            estimated_daily_revenue=estimated_daily_revenue,
+            adr=adr,
+            revpar=revpar,
+            today_checkins=display_checkins,
+            today_checkouts=today_checkouts,
+            total_revenue=total_revenue,
+            monthly_revenue=monthly_revenue,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"KPI computation error: {str(exc)}",
+        )
 
 
 @app.get(

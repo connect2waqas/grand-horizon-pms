@@ -26,7 +26,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Generator, List, Optional
 import sqlite3
 
-from fastapi import Depends, FastAPI, HTTPException, Query, status
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -163,10 +163,20 @@ class LegacyPathRewriterMiddleware:
     async def __call__(self, scope, receive, send):
         if scope["type"] == "http":
             path = scope.get("path", "")
+            query_string = scope.get("query_string", b"").decode("utf-8", errors="ignore")
+
+            # Check if Vercel passed the path via query string __path__
+            if "__path__=" in query_string:
+                import urllib.parse
+                parsed_qs = urllib.parse.parse_qs(query_string)
+                if "__path__" in parsed_qs and parsed_qs["__path__"]:
+                    extracted = parsed_qs["__path__"][0].lstrip("/")
+                    path = f"/api/{extracted}"
+                    scope["path"] = path
 
             # Check if Vercel forwarded the original URL via x-matched-path header
             headers = dict(scope.get("headers", []))
-            matched_path = headers.get(b"x-matched-path", b"").decode("utf-8")
+            matched_path = headers.get(b"x-matched-path", b"").decode("utf-8", errors="ignore")
             if matched_path and matched_path != "/api/index.py":
                 path = matched_path
                 scope["path"] = path
@@ -190,7 +200,8 @@ app.add_middleware(LegacyPathRewriterMiddleware)
     tags=["System"],
 )
 @app.get("/health", include_in_schema=False)
-def health_check():
+@app.get("/api/index.py", include_in_schema=False)
+def health_check(request: Request = None):
     """
     Returns deployment health status for Vercel, Supabase connection, and edge monitors.
     Tests active database connectivity and returns clear diagnostics.
@@ -206,11 +217,23 @@ def health_check():
         db_status = "error"
         db_error = str(e)
 
+    headers_dict = {}
+    path_info = {}
+    if request:
+        headers_dict = {k: v for k, v in request.headers.items() if "auth" not in k.lower() and "cookie" not in k.lower()}
+        path_info = {
+            "url": str(request.url),
+            "path": request.url.path,
+            "scope_path": request.scope.get("path"),
+        }
+
     return {
         "status": "healthy" if db_status == "connected" else "degraded",
         "database": db_status,
         "database_error": db_error,
         "is_postgres": IS_POSTGRES,
+        "path_info": path_info,
+        "headers": headers_dict,
         "service": "Grand Horizon PMS API",
         "runtime": "Vercel Serverless (Python 3.14+)",
     }

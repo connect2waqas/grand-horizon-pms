@@ -29,7 +29,9 @@ def get_database_url() -> str:
     if not url:
         return f"sqlite:///{DATABASE_PATH}"
     if url.startswith("postgres://"):
-        url = url.replace("postgres://", "postgresql://", 1)
+        url = url.replace("postgres://", "postgresql+psycopg2://", 1)
+    elif url.startswith("postgresql://") and not url.startswith("postgresql+"):
+        url = url.replace("postgresql://", "postgresql+psycopg2://", 1)
     return url
 
 IS_POSTGRES = bool(os.getenv("DATABASE_URL", "").startswith(("postgresql", "postgres")))

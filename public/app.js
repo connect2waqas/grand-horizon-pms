@@ -1070,7 +1070,26 @@ function showBookingReceipt(booking) {
 }
 
 function setLoading(isLoading) {
-  loadingState.classList.toggle("hidden", !isLoading);
+  if (loadingState) loadingState.classList.toggle("hidden", !isLoading);
+  if (isLoading && roomsGrid && (!allRoomsData || allRoomsData.length === 0)) {
+    renderSkeletons();
+  }
+}
+
+function renderSkeletons() {
+  if (!roomsGrid) return;
+  roomsGrid.setAttribute("aria-busy", "true");
+  roomsGrid.innerHTML = Array(6).fill(0).map(() => `
+    <div class="room-skeleton-card" aria-hidden="true">
+      <div class="skeleton-header">
+        <div class="skeleton skeleton-badge"></div>
+        <div class="skeleton skeleton-pill"></div>
+      </div>
+      <div class="skeleton skeleton-title"></div>
+      <div class="skeleton skeleton-price"></div>
+      <div class="skeleton skeleton-btn"></div>
+    </div>
+  `).join('');
 }
 
 function setSubmitting(isSubmitting) {

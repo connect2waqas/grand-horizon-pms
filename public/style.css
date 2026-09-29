@@ -131,37 +131,70 @@ body {
   display: flex;
   align-items: center;
   gap: 12px;
+  cursor: pointer;
+  user-select: none;
 }
 
-.brand-icon {
-  width: 36px;
-  height: 36px;
-  background-color: var(--brand-primary);
-  color: #ffffff;
-  border-radius: var(--radius-md);
+.brand-logo {
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), filter 0.25s ease;
+  filter: drop-shadow(0 2px 8px rgba(245, 158, 11, 0.2));
+}
+
+.brand:hover .brand-logo {
+  transform: translateY(-1px) scale(1.04);
+  filter: drop-shadow(0 4px 14px rgba(245, 158, 11, 0.4));
+}
+
+.brand-logo-svg {
+  display: block;
 }
 
 .brand-meta {
   display: flex;
   flex-direction: column;
+  gap: 2px;
+}
+
+.brand-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .brand-title {
-  font-size: clamp(0.9375rem, 1.2vw + 0.6rem, 1.125rem);
+  font-size: clamp(1rem, 1.2vw + 0.65rem, 1.25rem);
   font-weight: 700;
-  color: var(--text-high-contrast);
-  letter-spacing: -0.01em;
-  line-height: 1.2;
+  color: #ffffff;
+  letter-spacing: -0.015em;
+  line-height: 1.15;
+  background: linear-gradient(135deg, #ffffff 60%, #cbd5e1 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.brand-tier-badge {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  padding: 1px 6px;
+  border-radius: 4px;
+  line-height: 1.4;
 }
 
 .brand-subtitle {
   font-size: clamp(0.6875rem, 0.8vw + 0.45rem, 0.75rem);
   color: var(--text-muted);
-  font-weight: 400;
+  font-weight: 500;
+  letter-spacing: 0.01em;
 }
 
 .header-actions {

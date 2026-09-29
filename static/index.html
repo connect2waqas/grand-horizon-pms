@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Grand Horizon Hotel | Reservation & Management Dashboard</title>
   <meta name="description" content="Modern enterprise Hotel Management System dashboard for room inventory and real-time reservations.">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="apple-touch-icon" href="favicon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -16,13 +18,45 @@
   <header class="app-header">
     <div class="header-container">
       <div class="brand">
-        <div class="brand-icon">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M3 21h18M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16M9 9h1m4 0h1m-6 4h1m4 0h1m-6 4h1m4 0h1"/>
+        <div class="brand-logo" aria-label="Grand Horizon Luxury Resort Emblem">
+          <svg class="brand-logo-svg" width="40" height="40" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="headerGoldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#FDE68A"/>
+                <stop offset="40%" stop-color="#F59E0B"/>
+                <stop offset="100%" stop-color="#D97706"/>
+              </linearGradient>
+              <linearGradient id="headerIndigoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#A5B4FC"/>
+                <stop offset="50%" stop-color="#6366F1"/>
+                <stop offset="100%" stop-color="#4338CA"/>
+              </linearGradient>
+              <linearGradient id="headerShieldGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stop-color="#1E293B"/>
+                <stop offset="100%" stop-color="#0B1120"/>
+              </linearGradient>
+            </defs>
+            <!-- Badge Frame with Gold Trim -->
+            <rect x="2" y="2" width="44" height="44" rx="12" fill="url(#headerShieldGrad)" stroke="url(#headerGoldGrad)" stroke-width="1.8"/>
+            <!-- Radiant Horizon Sun -->
+            <circle cx="24" cy="22" r="5" fill="url(#headerGoldGrad)" opacity="0.95"/>
+            <!-- Sunburst Radiance Rays -->
+            <path d="M24 11V14M24 30V33M13 22H16M32 22H35M16.2 14.2L18.3 16.3M29.7 27.7L31.8 29.8M16.2 29.8L18.3 27.7M29.7 16.3L31.8 14.2" stroke="url(#headerGoldGrad)" stroke-width="1.2" stroke-linecap="round" opacity="0.6"/>
+            <!-- Architectural Arch Pavilion -->
+            <path d="M14 34V26C14 20.4772 18.4772 16 24 16C29.5228 16 34 20.4772 34 26V34" stroke="url(#headerGoldGrad)" stroke-width="2" stroke-linecap="round"/>
+            <path d="M19 34V27C19 24.2386 21.2386 22 24 22C26.7614 22 29 24.2386 29 27V34" stroke="url(#headerIndigoGrad)" stroke-width="1.8" stroke-linecap="round"/>
+            <!-- Foundation Base -->
+            <path d="M10 35H38" stroke="url(#headerGoldGrad)" stroke-width="2" stroke-linecap="round"/>
+            <path d="M14 38H34" stroke="url(#headerIndigoGrad)" stroke-width="1.5" stroke-linecap="round" opacity="0.8"/>
+            <!-- 5-Star Luxury Star Apex -->
+            <polygon points="24,5.5 25.5,9.5 29.5,10 26.5,13 27.5,17 24,15 20.5,17 21.5,13 18.5,10 22.5,9.5" fill="url(#headerGoldGrad)"/>
           </svg>
         </div>
         <div class="brand-meta">
-          <span class="brand-title">Grand Horizon</span>
+          <div class="brand-title-row">
+            <span class="brand-title">Grand Horizon</span>
+            <span class="brand-tier-badge">5-STAR LUXURY</span>
+          </div>
           <span class="brand-subtitle">Suite & Inventory Management</span>
         </div>
       </div>

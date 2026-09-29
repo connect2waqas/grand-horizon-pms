@@ -602,10 +602,10 @@ function renderRooms(rooms) {
           Status
         </span>
         <select class="quick-action-select" data-room-id="${room.id}" aria-label="Change Room Status">
-          <option value="Available" ${room.status === "Available" ? "selected" : ""}>Available</option>
-          <option value="Cleaning" ${room.status === "Cleaning" ? "selected" : ""}>Cleaning</option>
-          <option value="Occupied" ${room.status === "Occupied" ? "selected" : ""}>Occupied</option>
-          <option value="Maintenance" ${room.status === "Maintenance" ? "selected" : ""}>Maintenance</option>
+          <option value="Available" ${room.status === "Available" ? "selected" : ""}>Mark Available</option>
+          <option value="Cleaning" ${room.status === "Cleaning" ? "selected" : ""}>Mark Cleaned</option>
+          <option value="Occupied" ${room.status === "Occupied" ? "selected" : ""}>Mark Occupied</option>
+          <option value="Maintenance" ${room.status === "Maintenance" ? "selected" : ""}>Mark Maintenance</option>
         </select>
       </div>
     `;

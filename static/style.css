@@ -24,21 +24,25 @@
   --brand-ring: rgba(99, 102, 241, 0.2);  /* Crisp focus ring */
 
   /* Semantic Status Colors */
-  --status-available-bg: rgba(16, 185, 129, 0.1);
-  --status-available-text: #34d399; /* Soft Emerald */
-  --status-available-border: rgba(16, 185, 129, 0.2);
+  --status-available-bg: rgba(16, 185, 129, 0.12);
+  --status-available-text: #34d399; /* Soft Emerald Green */
+  --status-available-border: rgba(16, 185, 129, 0.28);
 
-  --status-occupied-bg: rgba(245, 158, 11, 0.12);
-  --status-occupied-text: #fbbf24;  /* Muted Amber */
-  --status-occupied-border: rgba(245, 158, 11, 0.25);
+  --status-occupied-bg: rgba(239, 68, 68, 0.12);
+  --status-occupied-text: #f87171;  /* Soft Red */
+  --status-occupied-border: rgba(239, 68, 68, 0.28);
 
-  --status-cleaning-bg: rgba(234, 179, 8, 0.12);
-  --status-cleaning-text: #facc15;  /* Soft Yellow */
-  --status-cleaning-border: rgba(234, 179, 8, 0.25);
+  --status-cleaning-bg: rgba(234, 179, 8, 0.14);
+  --status-cleaning-text: #facc15;  /* Bright Housekeeping Yellow */
+  --status-cleaning-border: rgba(234, 179, 8, 0.3);
 
-  --status-error-bg: rgba(239, 68, 68, 0.1);
+  --status-maintenance-bg: rgba(244, 63, 94, 0.14);
+  --status-maintenance-text: #fda4af; /* Muted Crimson */
+  --status-maintenance-border: rgba(244, 63, 94, 0.3);
+
+  --status-error-bg: rgba(239, 68, 68, 0.12);
   --status-error-text: #f87171;    /* Soft Red */
-  --status-error-border: rgba(239, 68, 68, 0.2);
+  --status-error-border: rgba(239, 68, 68, 0.28);
 
   /* Typography Hierarchy (Plus Jakarta Sans) */
   --font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;

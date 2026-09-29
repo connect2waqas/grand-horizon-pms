@@ -1278,22 +1278,23 @@ def check_out_booking(
     amenities_charge = round(sum(ar["price_charged"] for ar in amenity_rows), 2)
 
     # Fetch incidentals billed
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS FolioCharges (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        booking_id INTEGER NOT NULL,
-        service_category TEXT NOT NULL CHECK(service_category IN ('Dining', 'Minibar', 'Spa', 'Parking', 'Laundry', 'Miscellaneous')),
-        description TEXT NOT NULL,
-        unit_price REAL NOT NULL CHECK(unit_price >= 0.0),
-        quantity INTEGER NOT NULL DEFAULT 1 CHECK(quantity > 0),
-        total_price REAL NOT NULL CHECK(total_price >= 0.0),
-        status TEXT NOT NULL DEFAULT 'Billed' CHECK(status IN ('Billed', 'Paid', 'Voided')),
-        posted_by TEXT NOT NULL DEFAULT 'Front Desk Agent',
-        void_reason TEXT DEFAULT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (booking_id) REFERENCES Bookings(id) ON DELETE CASCADE
-    );
-    """)
+    if not IS_POSTGRES:
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS FolioCharges (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            booking_id INTEGER NOT NULL,
+            service_category TEXT NOT NULL CHECK(service_category IN ('Dining', 'Minibar', 'Spa', 'Parking', 'Laundry', 'Miscellaneous')),
+            description TEXT NOT NULL,
+            unit_price REAL NOT NULL CHECK(unit_price >= 0.0),
+            quantity INTEGER NOT NULL DEFAULT 1 CHECK(quantity > 0),
+            total_price REAL NOT NULL CHECK(total_price >= 0.0),
+            status TEXT NOT NULL DEFAULT 'Billed' CHECK(status IN ('Billed', 'Paid', 'Voided')),
+            posted_by TEXT NOT NULL DEFAULT 'Front Desk Agent',
+            void_reason TEXT DEFAULT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (booking_id) REFERENCES Bookings(id) ON DELETE CASCADE
+        );
+        """)
     cursor.execute(
         """
         SELECT id, service_category, description, unit_price, quantity, total_price, status
@@ -2023,18 +2024,19 @@ def get_audit_logs(
     Retrieves the chronological audit ledger for enterprise compliance and change tracking.
     """
     cursor = conn.cursor()
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS AuditLogs (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        action TEXT NOT NULL,
-        entity_type TEXT NOT NULL,
-        entity_id INTEGER,
-        actor TEXT NOT NULL DEFAULT 'Front Desk Agent',
-        details TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );
-    """)
+    if not IS_POSTGRES:
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS AuditLogs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            action TEXT NOT NULL,
+            entity_type TEXT NOT NULL,
+            entity_id INTEGER,
+            actor TEXT NOT NULL DEFAULT 'Front Desk Agent',
+            details TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        """)
 
     query = "SELECT * FROM AuditLogs WHERE 1=1"
     params = []
@@ -2090,23 +2092,24 @@ def get_maintenance_tickets(
     Auto-ensures MaintenanceTickets table exists for test fixtures.
     """
     cursor = conn.cursor()
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS MaintenanceTickets (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        room_id INTEGER NOT NULL,
-        issue_description TEXT NOT NULL,
-        category TEXT NOT NULL CHECK(category IN ('Plumbing', 'Electrical', 'HVAC', 'Furniture', 'Sanitization', 'Structural', 'General')),
-        priority TEXT NOT NULL CHECK(priority IN ('Low', 'Medium', 'High', 'Urgent')),
-        status TEXT NOT NULL DEFAULT 'Open' CHECK(status IN ('Open', 'In Progress', 'Resolved', 'Cancelled')),
-        assigned_staff TEXT DEFAULT 'Facilities Team',
-        reported_by TEXT DEFAULT 'Housekeeping',
-        estimated_cost REAL DEFAULT 0.0,
-        resolution_notes TEXT DEFAULT '',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        resolved_at TIMESTAMP DEFAULT NULL,
-        FOREIGN KEY (room_id) REFERENCES Rooms(id) ON DELETE CASCADE
-    );
-    """)
+    if not IS_POSTGRES:
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS MaintenanceTickets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            room_id INTEGER NOT NULL,
+            issue_description TEXT NOT NULL,
+            category TEXT NOT NULL CHECK(category IN ('Plumbing', 'Electrical', 'HVAC', 'Furniture', 'Sanitization', 'Structural', 'General')),
+            priority TEXT NOT NULL CHECK(priority IN ('Low', 'Medium', 'High', 'Urgent')),
+            status TEXT NOT NULL DEFAULT 'Open' CHECK(status IN ('Open', 'In Progress', 'Resolved', 'Cancelled')),
+            assigned_staff TEXT DEFAULT 'Facilities Team',
+            reported_by TEXT DEFAULT 'Housekeeping',
+            estimated_cost REAL DEFAULT 0.0,
+            resolution_notes TEXT DEFAULT '',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            resolved_at TIMESTAMP DEFAULT NULL,
+            FOREIGN KEY (room_id) REFERENCES Rooms(id) ON DELETE CASCADE
+        );
+        """)
 
     query = """
     SELECT mt.*, r.room_number
@@ -2160,23 +2163,24 @@ def get_maintenance_tickets(
 def get_maintenance_summary(conn: sqlite3.Connection = Depends(get_db)):
     """Computes operational counts across work order statuses and urgent requests."""
     cursor = conn.cursor()
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS MaintenanceTickets (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        room_id INTEGER NOT NULL,
-        issue_description TEXT NOT NULL,
-        category TEXT NOT NULL CHECK(category IN ('Plumbing', 'Electrical', 'HVAC', 'Furniture', 'Sanitization', 'Structural', 'General')),
-        priority TEXT NOT NULL CHECK(priority IN ('Low', 'Medium', 'High', 'Urgent')),
-        status TEXT NOT NULL DEFAULT 'Open' CHECK(status IN ('Open', 'In Progress', 'Resolved', 'Cancelled')),
-        assigned_staff TEXT DEFAULT 'Facilities Team',
-        reported_by TEXT DEFAULT 'Housekeeping',
-        estimated_cost REAL DEFAULT 0.0,
-        resolution_notes TEXT DEFAULT '',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        resolved_at TIMESTAMP DEFAULT NULL,
-        FOREIGN KEY (room_id) REFERENCES Rooms(id) ON DELETE CASCADE
-    );
-    """)
+    if not IS_POSTGRES:
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS MaintenanceTickets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            room_id INTEGER NOT NULL,
+            issue_description TEXT NOT NULL,
+            category TEXT NOT NULL CHECK(category IN ('Plumbing', 'Electrical', 'HVAC', 'Furniture', 'Sanitization', 'Structural', 'General')),
+            priority TEXT NOT NULL CHECK(priority IN ('Low', 'Medium', 'High', 'Urgent')),
+            status TEXT NOT NULL DEFAULT 'Open' CHECK(status IN ('Open', 'In Progress', 'Resolved', 'Cancelled')),
+            assigned_staff TEXT DEFAULT 'Facilities Team',
+            reported_by TEXT DEFAULT 'Housekeeping',
+            estimated_cost REAL DEFAULT 0.0,
+            resolution_notes TEXT DEFAULT '',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            resolved_at TIMESTAMP DEFAULT NULL,
+            FOREIGN KEY (room_id) REFERENCES Rooms(id) ON DELETE CASCADE
+        );
+        """)
 
     cursor.execute("SELECT status, priority FROM MaintenanceTickets;")
     rows = cursor.fetchall()
@@ -2214,23 +2218,24 @@ def create_maintenance_ticket(
     4. Records immutable audit ledger entries.
     """
     cursor = conn.cursor()
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS MaintenanceTickets (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        room_id INTEGER NOT NULL,
-        issue_description TEXT NOT NULL,
-        category TEXT NOT NULL CHECK(category IN ('Plumbing', 'Electrical', 'HVAC', 'Furniture', 'Sanitization', 'Structural', 'General')),
-        priority TEXT NOT NULL CHECK(priority IN ('Low', 'Medium', 'High', 'Urgent')),
-        status TEXT NOT NULL DEFAULT 'Open' CHECK(status IN ('Open', 'In Progress', 'Resolved', 'Cancelled')),
-        assigned_staff TEXT DEFAULT 'Facilities Team',
-        reported_by TEXT DEFAULT 'Housekeeping',
-        estimated_cost REAL DEFAULT 0.0,
-        resolution_notes TEXT DEFAULT '',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        resolved_at TIMESTAMP DEFAULT NULL,
-        FOREIGN KEY (room_id) REFERENCES Rooms(id) ON DELETE CASCADE
-    );
-    """)
+    if not IS_POSTGRES:
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS MaintenanceTickets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            room_id INTEGER NOT NULL,
+            issue_description TEXT NOT NULL,
+            category TEXT NOT NULL CHECK(category IN ('Plumbing', 'Electrical', 'HVAC', 'Furniture', 'Sanitization', 'Structural', 'General')),
+            priority TEXT NOT NULL CHECK(priority IN ('Low', 'Medium', 'High', 'Urgent')),
+            status TEXT NOT NULL DEFAULT 'Open' CHECK(status IN ('Open', 'In Progress', 'Resolved', 'Cancelled')),
+            assigned_staff TEXT DEFAULT 'Facilities Team',
+            reported_by TEXT DEFAULT 'Housekeeping',
+            estimated_cost REAL DEFAULT 0.0,
+            resolution_notes TEXT DEFAULT '',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            resolved_at TIMESTAMP DEFAULT NULL,
+            FOREIGN KEY (room_id) REFERENCES Rooms(id) ON DELETE CASCADE
+        );
+        """)
 
     cursor.execute("SELECT id, room_number, status FROM Rooms WHERE id = ?;", (ticket.room_id,))
     room = cursor.fetchone()
@@ -2339,23 +2344,24 @@ def update_maintenance_ticket(
     4. Records audit log.
     """
     cursor = conn.cursor()
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS MaintenanceTickets (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        room_id INTEGER NOT NULL,
-        issue_description TEXT NOT NULL,
-        category TEXT NOT NULL CHECK(category IN ('Plumbing', 'Electrical', 'HVAC', 'Furniture', 'Sanitization', 'Structural', 'General')),
-        priority TEXT NOT NULL CHECK(priority IN ('Low', 'Medium', 'High', 'Urgent')),
-        status TEXT NOT NULL DEFAULT 'Open' CHECK(status IN ('Open', 'In Progress', 'Resolved', 'Cancelled')),
-        assigned_staff TEXT DEFAULT 'Facilities Team',
-        reported_by TEXT DEFAULT 'Housekeeping',
-        estimated_cost REAL DEFAULT 0.0,
-        resolution_notes TEXT DEFAULT '',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        resolved_at TIMESTAMP DEFAULT NULL,
-        FOREIGN KEY (room_id) REFERENCES Rooms(id) ON DELETE CASCADE
-    );
-    """)
+    if not IS_POSTGRES:
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS MaintenanceTickets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            room_id INTEGER NOT NULL,
+            issue_description TEXT NOT NULL,
+            category TEXT NOT NULL CHECK(category IN ('Plumbing', 'Electrical', 'HVAC', 'Furniture', 'Sanitization', 'Structural', 'General')),
+            priority TEXT NOT NULL CHECK(priority IN ('Low', 'Medium', 'High', 'Urgent')),
+            status TEXT NOT NULL DEFAULT 'Open' CHECK(status IN ('Open', 'In Progress', 'Resolved', 'Cancelled')),
+            assigned_staff TEXT DEFAULT 'Facilities Team',
+            reported_by TEXT DEFAULT 'Housekeeping',
+            estimated_cost REAL DEFAULT 0.0,
+            resolution_notes TEXT DEFAULT '',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            resolved_at TIMESTAMP DEFAULT NULL,
+            FOREIGN KEY (room_id) REFERENCES Rooms(id) ON DELETE CASCADE
+        );
+        """)
 
     cursor.execute(
         """
@@ -2548,22 +2554,23 @@ def get_booking_folio(
     - Net grand total and outstanding balance due
     """
     cursor = conn.cursor()
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS FolioCharges (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        booking_id INTEGER NOT NULL,
-        service_category TEXT NOT NULL CHECK(service_category IN ('Dining', 'Minibar', 'Spa', 'Parking', 'Laundry', 'Miscellaneous')),
-        description TEXT NOT NULL,
-        unit_price REAL NOT NULL CHECK(unit_price >= 0.0),
-        quantity INTEGER NOT NULL DEFAULT 1 CHECK(quantity > 0),
-        total_price REAL NOT NULL CHECK(total_price >= 0.0),
-        status TEXT NOT NULL DEFAULT 'Billed' CHECK(status IN ('Billed', 'Paid', 'Voided')),
-        posted_by TEXT NOT NULL DEFAULT 'Front Desk Agent',
-        void_reason TEXT DEFAULT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (booking_id) REFERENCES Bookings(id) ON DELETE CASCADE
-    );
-    """)
+    if not IS_POSTGRES:
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS FolioCharges (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            booking_id INTEGER NOT NULL,
+            service_category TEXT NOT NULL CHECK(service_category IN ('Dining', 'Minibar', 'Spa', 'Parking', 'Laundry', 'Miscellaneous')),
+            description TEXT NOT NULL,
+            unit_price REAL NOT NULL CHECK(unit_price >= 0.0),
+            quantity INTEGER NOT NULL DEFAULT 1 CHECK(quantity > 0),
+            total_price REAL NOT NULL CHECK(total_price >= 0.0),
+            status TEXT NOT NULL DEFAULT 'Billed' CHECK(status IN ('Billed', 'Paid', 'Voided')),
+            posted_by TEXT NOT NULL DEFAULT 'Front Desk Agent',
+            void_reason TEXT DEFAULT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (booking_id) REFERENCES Bookings(id) ON DELETE CASCADE
+        );
+        """)
 
     cursor.execute(
         """
@@ -2690,22 +2697,23 @@ def post_folio_charge(
     - Logs audit trail entry FOLIO_CHARGE_POSTED
     """
     cursor = conn.cursor()
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS FolioCharges (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        booking_id INTEGER NOT NULL,
-        service_category TEXT NOT NULL CHECK(service_category IN ('Dining', 'Minibar', 'Spa', 'Parking', 'Laundry', 'Miscellaneous')),
-        description TEXT NOT NULL,
-        unit_price REAL NOT NULL CHECK(unit_price >= 0.0),
-        quantity INTEGER NOT NULL DEFAULT 1 CHECK(quantity > 0),
-        total_price REAL NOT NULL CHECK(total_price >= 0.0),
-        status TEXT NOT NULL DEFAULT 'Billed' CHECK(status IN ('Billed', 'Paid', 'Voided')),
-        posted_by TEXT NOT NULL DEFAULT 'Front Desk Agent',
-        void_reason TEXT DEFAULT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (booking_id) REFERENCES Bookings(id) ON DELETE CASCADE
-    );
-    """)
+    if not IS_POSTGRES:
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS FolioCharges (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            booking_id INTEGER NOT NULL,
+            service_category TEXT NOT NULL CHECK(service_category IN ('Dining', 'Minibar', 'Spa', 'Parking', 'Laundry', 'Miscellaneous')),
+            description TEXT NOT NULL,
+            unit_price REAL NOT NULL CHECK(unit_price >= 0.0),
+            quantity INTEGER NOT NULL DEFAULT 1 CHECK(quantity > 0),
+            total_price REAL NOT NULL CHECK(total_price >= 0.0),
+            status TEXT NOT NULL DEFAULT 'Billed' CHECK(status IN ('Billed', 'Paid', 'Voided')),
+            posted_by TEXT NOT NULL DEFAULT 'Front Desk Agent',
+            void_reason TEXT DEFAULT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (booking_id) REFERENCES Bookings(id) ON DELETE CASCADE
+        );
+        """)
 
     cursor.execute(
         """
@@ -2806,22 +2814,23 @@ def void_folio_charge(
     - Appends audit trail entry FOLIO_CHARGE_VOIDED
     """
     cursor = conn.cursor()
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS FolioCharges (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        booking_id INTEGER NOT NULL,
-        service_category TEXT NOT NULL CHECK(service_category IN ('Dining', 'Minibar', 'Spa', 'Parking', 'Laundry', 'Miscellaneous')),
-        description TEXT NOT NULL,
-        unit_price REAL NOT NULL CHECK(unit_price >= 0.0),
-        quantity INTEGER NOT NULL DEFAULT 1 CHECK(quantity > 0),
-        total_price REAL NOT NULL CHECK(total_price >= 0.0),
-        status TEXT NOT NULL DEFAULT 'Billed' CHECK(status IN ('Billed', 'Paid', 'Voided')),
-        posted_by TEXT NOT NULL DEFAULT 'Front Desk Agent',
-        void_reason TEXT DEFAULT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (booking_id) REFERENCES Bookings(id) ON DELETE CASCADE
-    );
-    """)
+    if not IS_POSTGRES:
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS FolioCharges (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            booking_id INTEGER NOT NULL,
+            service_category TEXT NOT NULL CHECK(service_category IN ('Dining', 'Minibar', 'Spa', 'Parking', 'Laundry', 'Miscellaneous')),
+            description TEXT NOT NULL,
+            unit_price REAL NOT NULL CHECK(unit_price >= 0.0),
+            quantity INTEGER NOT NULL DEFAULT 1 CHECK(quantity > 0),
+            total_price REAL NOT NULL CHECK(total_price >= 0.0),
+            status TEXT NOT NULL DEFAULT 'Billed' CHECK(status IN ('Billed', 'Paid', 'Voided')),
+            posted_by TEXT NOT NULL DEFAULT 'Front Desk Agent',
+            void_reason TEXT DEFAULT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (booking_id) REFERENCES Bookings(id) ON DELETE CASCADE
+        );
+        """)
 
     cursor.execute("SELECT * FROM FolioCharges WHERE id = ?;", (charge_id,))
     charge = cursor.fetchone()

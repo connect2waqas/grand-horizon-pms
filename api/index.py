@@ -762,17 +762,10 @@ def calculate_dynamic_pricing(
     )
 
 
-@app.post(
-    "/api/bookings",
-    response_model=BookingResponse,
-    status_code=status.HTTP_201_CREATED,
-    summary="Create a new reservation",
-    tags=["Bookings"],
-)
-def create_booking(
+def _create_booking_impl(
     booking_data: BookingCreate,
-    conn: sqlite3.Connection = Depends(get_db),
-):
+    conn: sqlite3.Connection,
+) -> BookingResponse:
     """
     Reserves a room for a guest:
     1. Verifies room exists and is not under maintenance.
@@ -1056,6 +1049,34 @@ def create_booking(
         ),
         amenities=selected_amenities,
     )
+
+
+@app.post(
+    "/api/bookings",
+    response_model=BookingResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create a new reservation",
+    tags=["Bookings"],
+)
+def create_booking(
+    booking_data: BookingCreate,
+    conn: sqlite3.Connection = Depends(get_db),
+):
+    try:
+        return _create_booking_impl(booking_data, conn)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        import traceback
+        tb = traceback.format_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Reservation booking error: {type(exc).__name__}: {str(exc)}\n{tb}",
+        )
 
 
 

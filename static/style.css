@@ -105,10 +105,18 @@ body {
 .header-container {
   max-width: 1440px;
   margin: 0 auto;
-  padding: 14px 24px;
+  padding: 12px 16px;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
+}
+
+@media (min-width: 640px) {
+  .header-container {
+    padding: 14px 24px;
+  }
 }
 
 .brand {
@@ -135,14 +143,15 @@ body {
 }
 
 .brand-title {
-  font-size: 15px;
+  font-size: clamp(0.9375rem, 1.2vw + 0.6rem, 1.125rem);
   font-weight: 700;
   color: var(--text-high-contrast);
   letter-spacing: -0.01em;
+  line-height: 1.2;
 }
 
 .brand-subtitle {
-  font-size: 12px;
+  font-size: clamp(0.6875rem, 0.8vw + 0.45rem, 0.75rem);
   color: var(--text-muted);
   font-weight: 400;
 }
@@ -150,7 +159,13 @@ body {
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
+}
+
+@media (min-width: 640px) {
+  .header-actions {
+    gap: 16px;
+  }
 }
 
 .status-badge {
@@ -195,32 +210,43 @@ body {
 }
 
 /* ==========================================================================
-   Dashboard Canvas & KPI Bar
+   Dashboard Canvas & Mobile-First KPI Bar
    ========================================================================== */
 
 .dashboard-canvas {
   max-width: 1440px;
   margin: 0 auto;
-  padding: 24px 24px 40px;
+  padding: 16px 16px 32px;
 }
 
-/* Top-Level Executive KPI Grid */
-.kpi-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 20px;
-  margin-bottom: 32px;
-}
-
-@media (max-width: 1024px) {
-  .kpi-grid {
-    grid-template-columns: repeat(2, 1fr);
+@media (min-width: 768px) {
+  .dashboard-canvas {
+    padding: 24px 24px 40px;
   }
 }
 
-@media (max-width: 640px) {
+/* Mobile-First Executive KPI Grid */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+  margin-bottom: 24px;
+  container-type: inline-size;
+  container-name: kpi-grid;
+}
+
+@media (min-width: 640px) {
   .kpi-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .kpi-grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
+    margin-bottom: 32px;
   }
 }
 
@@ -228,12 +254,18 @@ body {
   background-color: var(--surface-bg);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
-  padding: 18px 20px;
+  padding: 16px 18px;
   display: flex;
   flex-direction: column;
   gap: 6px;
   box-shadow: var(--shadow-card);
   transition: var(--transition-standard);
+}
+
+@media (min-width: 640px) {
+  .kpi-card {
+    padding: 18px 20px;
+  }
 }
 
 .kpi-card:hover {
@@ -264,10 +296,11 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
 }
 
 .kpi-value {
-  font-size: 26px;
+  font-size: clamp(1.375rem, 2.5vw + 0.5rem, 1.75rem);
   font-weight: 700;
   color: var(--text-high-contrast);
   letter-spacing: -0.02em;
@@ -287,38 +320,53 @@ body {
   color: #a5b4fc;
 }
 
-/* Dashboard Body 2-Column Layout */
+/* Dashboard Body Mobile-First Layout */
 .dashboard-body {
   display: grid;
-  grid-template-columns: 1fr 380px;
-  gap: 32px;
+  grid-template-columns: 1fr;
+  gap: 24px;
   align-items: start;
 }
 
-@media (max-width: 1024px) {
+@media (min-width: 1024px) {
   .dashboard-body {
-    grid-template-columns: 1fr;
-    gap: 24px;
+    grid-template-columns: 1fr 380px;
+    gap: 32px;
   }
 }
 
-/* Section Header Typography */
+@media (min-width: 1280px) {
+  .dashboard-body {
+    grid-template-columns: 1fr 400px;
+  }
+}
+
+/* Inventory Section with Container Query Hook */
+.inventory-section {
+  container-type: inline-size;
+  container-name: inventory;
+}
+
+/* Section Header Fluid Typography */
 .section-heading {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: flex-end;
+  gap: 12px;
   margin-bottom: 20px;
 }
 
 .section-title {
-  font-size: 22px;
+  font-size: clamp(1.25rem, 2vw + 0.6rem, 1.5rem);
   font-weight: 700;
   color: var(--text-high-contrast);
   letter-spacing: -0.02em;
+  line-height: 1.2;
 }
 
 .section-subtitle {
-  font-size: 13px;
+  font-size: clamp(0.75rem, 0.8vw + 0.5rem, 0.875rem);
   color: var(--text-muted);
   margin-top: 3px;
 }
@@ -499,27 +547,52 @@ input::-webkit-calendar-picker-indicator {
 }
 
 /* ==========================================================================
-   Room Cards & Dynamic States (Available, Occupied, Cleaning)
+   Room Cards & Dynamic States (Mobile-First & Container Queries)
    ========================================================================== */
 
 .rooms-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 20px;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  container-type: inline-size;
+  container-name: rooms;
+}
+
+@container rooms (min-width: 500px) {
+  .rooms-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+  }
+}
+
+@container rooms (min-width: 780px) {
+  .rooms-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+  }
 }
 
 .room-card {
   background-color: var(--surface-bg);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
-  padding: 20px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  gap: 16px;
+  gap: 14px;
   box-shadow: var(--shadow-card);
   transition: var(--transition-standard);
   position: relative;
+  container-type: inline-size;
+  container-name: card;
+}
+
+@container card (min-width: 280px) {
+  .room-card {
+    padding: 20px;
+    gap: 16px;
+  }
 }
 
 /* State 1: Available (Clickable, interactive) */
@@ -542,14 +615,14 @@ input::-webkit-calendar-picker-indicator {
 /* State 2: Occupied (Slightly dimmed, amber badge, disabled button) */
 .room-card.state-occupied {
   opacity: 0.85;
-  border-color: rgba(245, 158, 11, 0.25);
+  border-color: rgba(239, 68, 68, 0.28);
   cursor: not-allowed;
 }
 
 /* State 3: Cleaning (Soft yellow badge, button disabled) */
 .room-card.state-cleaning {
   opacity: 0.85;
-  border-color: rgba(234, 179, 8, 0.25);
+  border-color: rgba(234, 179, 8, 0.3);
   cursor: not-allowed;
 }
 
@@ -564,6 +637,7 @@ input::-webkit-calendar-picker-indicator {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
+  gap: 8px;
 }
 
 .room-badge-group {
@@ -601,12 +675,13 @@ input::-webkit-calendar-picker-indicator {
   border: 1px solid rgba(245, 158, 11, 0.2);
 }
 
-/* Room Number */
+/* Room Number with Fluid Typography */
 .room-number {
-  font-size: 20px;
+  font-size: clamp(1.125rem, 1.5vw + 0.5rem, 1.25rem);
   font-weight: 700;
   color: var(--text-high-contrast);
   letter-spacing: -0.01em;
+  line-height: 1.2;
 }
 
 /* Status Indicator Pills */
@@ -637,9 +712,9 @@ input::-webkit-calendar-picker-indicator {
 }
 
 .status-pill-maintenance {
-  background-color: rgba(244, 63, 94, 0.12);
-  color: #fda4af;
-  border: 1px solid rgba(244, 63, 94, 0.28);
+  background-color: var(--status-maintenance-bg);
+  color: var(--status-maintenance-text);
+  border: 1px solid var(--status-maintenance-border);
 }
 
 /* Quick Actions Control inside Card */
@@ -687,7 +762,7 @@ input::-webkit-calendar-picker-indicator {
   border-color: var(--brand-primary);
 }
 
-/* Room Price */
+/* Room Price Fluid Typography */
 .card-middle {
   display: flex;
   align-items: baseline;
@@ -696,7 +771,7 @@ input::-webkit-calendar-picker-indicator {
 }
 
 .room-price-val {
-  font-size: 24px;
+  font-size: clamp(1.25rem, 1.8vw + 0.5rem, 1.5rem);
   font-weight: 700;
   color: var(--text-high-contrast);
   letter-spacing: -0.02em;

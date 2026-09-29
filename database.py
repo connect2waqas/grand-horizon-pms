@@ -51,24 +51,103 @@ else:
     )
 
 
+class PostgresCursorWrapper:
+    """
+    Wraps psycopg2.extras.RealDictCursor to provide SQLite-compatible API:
+    - Replaces '?' placeholders with '%s'
+    - Automatically captures lastrowid on INSERT queries via RETURNING id
+    - Provides dictionary-like column name access
+    """
+    def __init__(self, raw_cursor):
+        self._cursor = raw_cursor
+        self.lastrowid = None
+
+    def execute(self, query: str, params=None):
+        if params is not None:
+            query = query.replace("?", "%s")
+
+        is_insert = query.strip().upper().startswith("INSERT")
+        if is_insert and "RETURNING" not in query.upper():
+            trimmed = query.rstrip().rstrip(";")
+            returning_query = f"{trimmed} RETURNING id;"
+            try:
+                self._cursor.execute(returning_query, params)
+                row = self._cursor.fetchone()
+                if row and "id" in row:
+                    self.lastrowid = row["id"]
+                return self
+            except Exception:
+                pass
+
+        self._cursor.execute(query, params)
+        return self
+
+    def executemany(self, query: str, params_list):
+        query = query.replace("?", "%s")
+        return self._cursor.executemany(query, params_list)
+
+    def fetchone(self):
+        return self._cursor.fetchone()
+
+    def fetchall(self):
+        return self._cursor.fetchall()
+
+    def fetchmany(self, size=None):
+        return self._cursor.fetchmany(size) if size else self._cursor.fetchmany()
+
+    @property
+    def description(self):
+        return self._cursor.description
+
+    @property
+    def rowcount(self):
+        return self._cursor.rowcount
+
+    def close(self):
+        return self._cursor.close()
+
+    def __iter__(self):
+        return iter(self._cursor)
+
+
+class PostgresConnectionWrapper:
+    """
+    Wraps raw SQLAlchemy psycopg2 connection to mimic sqlite3.Connection.
+    """
+    def __init__(self, raw_conn):
+        self._conn = raw_conn
+
+    def cursor(self, *args, **kwargs):
+        if "cursor_factory" not in kwargs:
+            kwargs["cursor_factory"] = psycopg2.extras.RealDictCursor
+        raw_cur = self._conn.cursor(*args, **kwargs)
+        return PostgresCursorWrapper(raw_cur)
+
+    def execute(self, query: str, params=None):
+        cur = self.cursor()
+        cur.execute(query, params)
+        return cur
+
+    def commit(self):
+        return self._conn.commit()
+
+    def rollback(self):
+        return self._conn.rollback()
+
+    def close(self):
+        return self._conn.close()
+
+
 def get_db_connection():
     """
     Creates and returns a connection to the database.
     - If PostgreSQL (Supabase / Production): Uses SQLAlchemy connection pool with psycopg2 RealDictCursor
-      for dictionary-like column name access.
+      for dictionary-like column name access and SQLite compatibility wrapper.
     - If SQLite (Local Development): Connects with row_factory=sqlite3.Row and PRAGMA foreign_keys=ON.
     """
     if IS_POSTGRES:
         conn = engine.raw_connection()
-        orig_cursor = conn.cursor
-
-        def dict_cursor(*args, **kwargs):
-            if "cursor_factory" not in kwargs:
-                kwargs["cursor_factory"] = psycopg2.extras.RealDictCursor
-            return orig_cursor(*args, **kwargs)
-
-        conn.cursor = dict_cursor
-        return conn
+        return PostgresConnectionWrapper(conn)
     else:
         conn = sqlite3.connect(DATABASE_PATH, check_same_thread=False)
         conn.execute("PRAGMA foreign_keys = ON;")
@@ -83,6 +162,10 @@ def init_db() -> None:
     - Rooms: Room inventory with room type and operational status constraints
     - Bookings: Relational junction entity linking Guests and Rooms with date validation
     """
+    if IS_POSTGRES:
+        print("Connected to PostgreSQL database. Schema is managed via Supabase migrations.")
+        return
+
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -292,6 +375,8 @@ def seed_amenities() -> None:
     Seeds hotel amenities catalog (breakfast, shuttle, spa, valet, late checkout).
     Idempotent using INSERT OR IGNORE based on unique amenity name.
     """
+    if IS_POSTGRES:
+        return
     sample_amenities: List[Tuple[str, float, str]] = [
         ("Executive Breakfast", 24.99, "Daily full continental buffet with gourmet coffee"),
         ("Airport Shuttle Transfer", 35.00, "Private roundtrip airport transit service"),
@@ -323,6 +408,8 @@ def seed_rooms() -> None:
     Seeds the database with initial rooms across all categories and realistic operational states.
     Uses INSERT OR IGNORE based on unique room_number to guarantee idempotency.
     """
+    if IS_POSTGRES:
+        return
     sample_rooms: List[Tuple[str, str, float, str]] = [
         ("101", "Single", 79.99, "Available"),
         ("102", "Single", 84.99, "Cleaning"),
@@ -359,6 +446,8 @@ def seed_coupons() -> None:
     Seeds promotional discount coupons.
     Idempotent using INSERT OR IGNORE based on unique coupon code.
     """
+    if IS_POSTGRES:
+        return
     sample_coupons = [
         ("WELCOME10", "Percentage", 10.0, "2026-01-01", "2028-12-31", 100.0, 500, 0, 1),
         ("HORIZON25", "FixedAmount", 25.0, "2026-01-01", "2028-12-31", 150.0, 200, 0, 1),
@@ -386,6 +475,8 @@ def seed_audit_logs() -> None:
     """
     Seeds initial system audit logs if table is empty.
     """
+    if IS_POSTGRES:
+        return
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT COUNT(*) AS cnt FROM AuditLogs;")
@@ -411,6 +502,8 @@ def seed_maintenance_tickets() -> None:
     """
     Seeds initial maintenance work orders if table is empty.
     """
+    if IS_POSTGRES:
+        return
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT COUNT(*) AS cnt FROM MaintenanceTickets;")
@@ -435,6 +528,8 @@ def seed_folio_charges() -> None:
     """
     Seeds initial incidental folio charges for active bookings if table is empty.
     """
+    if IS_POSTGRES:
+        return
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT COUNT(*) AS cnt FROM FolioCharges;")

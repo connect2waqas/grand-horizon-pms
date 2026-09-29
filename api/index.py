@@ -11,9 +11,18 @@ Features:
 - Secure server-side pricing computation
 """
 
+import sys
+from pathlib import Path
+
+# Ensure parent root directory is in sys.path for Vercel Serverless runtime
+BASE_DIR = Path(__file__).resolve().parent.parent
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
+
+STATIC_DIR = BASE_DIR / "static"
+
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta, timezone
-from pathlib import Path
 from typing import Generator, List, Optional
 import sqlite3
 
@@ -31,6 +40,7 @@ from database import (
     seed_audit_logs,
     seed_maintenance_tickets,
     seed_folio_charges,
+    IS_POSTGRES,
 )
 from schemas import (
     AmenityResponse,
@@ -76,17 +86,6 @@ from schemas import (
     VIPTier,
 )
 
-# Paths
-import sys
-
-# Ensure parent root directory is in sys.path for Vercel Serverless runtime
-BASE_DIR = Path(__file__).resolve().parent.parent
-if str(BASE_DIR) not in sys.path:
-    sys.path.insert(0, str(BASE_DIR))
-
-STATIC_DIR = BASE_DIR / "static"
-
-
 # ==========================================
 # Database Connection Dependency
 # ==========================================
@@ -112,15 +111,20 @@ def get_db() -> Generator[sqlite3.Connection, None, None]:
 async def lifespan(app: FastAPI):
     """
     Application lifecycle management.
-    Initializes database schema and ensures sample rooms and amenities are seeded on startup.
+    Initializes database schema and ensures sample rooms and amenities are seeded on startup (SQLite).
+    In PostgreSQL / Supabase, schema and seeds are managed by supabase_migration.sql.
     """
-    init_db()
-    seed_rooms()
-    seed_amenities()
-    seed_coupons()
-    seed_audit_logs()
-    seed_maintenance_tickets()
-    seed_folio_charges()
+    try:
+        if not IS_POSTGRES:
+            init_db()
+            seed_rooms()
+            seed_amenities()
+            seed_coupons()
+            seed_audit_logs()
+            seed_maintenance_tickets()
+            seed_folio_charges()
+    except Exception as e:
+        print(f"Lifespan initialization note: {e}")
     yield
 
 

@@ -3948,22 +3948,41 @@ def ensure_housekeeping_tasks_table(conn: sqlite3.Connection):
 
 def row_to_housekeeping_task_response(r) -> HousekeepingTaskResponse:
     keys = r.keys() if hasattr(r, "keys") else []
+
+    def _parse_task_type(val):
+        try:
+            return HousekeepingTaskType(val)
+        except Exception:
+            return HousekeepingTaskType.CHECKOUT_TURNOVER
+
+    def _parse_priority(val):
+        try:
+            return HousekeepingPriority(val)
+        except Exception:
+            return HousekeepingPriority.NORMAL
+
+    def _parse_status(val):
+        try:
+            return HousekeepingTaskStatus(val)
+        except Exception:
+            return HousekeepingTaskStatus.PENDING
+
     return HousekeepingTaskResponse(
-        id=r["id"],
-        room_id=r["room_id"],
-        room_number=r["room_number"] if "room_number" in keys else None,
-        room_type=r["room_type"] if "room_type" in keys else None,
+        id=int(r["id"]),
+        room_id=int(r["room_id"]),
+        room_number=str(r["room_number"]) if "room_number" in keys and r["room_number"] is not None else None,
+        room_type=str(r["room_type"]) if "room_type" in keys and r["room_type"] is not None else None,
         floor=int(r["floor"]) if "floor" in keys and r["floor"] is not None else 1,
-        task_type=HousekeepingTaskType(r["task_type"]) if "task_type" in keys and r["task_type"] else HousekeepingTaskType.CHECKOUT_TURNOVER,
-        priority=HousekeepingPriority(r["priority"]) if "priority" in keys and r["priority"] else HousekeepingPriority.NORMAL,
-        status=HousekeepingTaskStatus(r["status"]) if "status" in keys and r["status"] else HousekeepingTaskStatus.PENDING,
+        task_type=_parse_task_type(r["task_type"] if "task_type" in keys else None),
+        priority=_parse_priority(r["priority"] if "priority" in keys else None),
+        status=_parse_status(r["status"] if "status" in keys else None),
         assigned_housekeeper=r["assigned_housekeeper"] if "assigned_housekeeper" in keys else None,
         linen_changed=bool(r["linen_changed"]) if "linen_changed" in keys and r["linen_changed"] is not None else False,
         amenities_restocked=bool(r["amenities_restocked"]) if "amenities_restocked" in keys and r["amenities_restocked"] is not None else False,
         bathroom_sanitized=bool(r["bathroom_sanitized"]) if "bathroom_sanitized" in keys and r["bathroom_sanitized"] is not None else False,
-        notes=r["notes"] if "notes" in keys and r["notes"] else "",
+        notes=str(r["notes"]) if "notes" in keys and r["notes"] else "",
         inspected_by=r["inspected_by"] if "inspected_by" in keys else None,
-        inspector_notes=r["inspector_notes"] if "inspector_notes" in keys and r["inspector_notes"] else "",
+        inspector_notes=str(r["inspector_notes"]) if "inspector_notes" in keys and r["inspector_notes"] else "",
         started_at=str(r["started_at"]) if "started_at" in keys and r["started_at"] else None,
         completed_at=str(r["completed_at"]) if "completed_at" in keys and r["completed_at"] else None,
         inspected_at=str(r["inspected_at"]) if "inspected_at" in keys and r["inspected_at"] else None,

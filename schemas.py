@@ -807,10 +807,10 @@ class HousekeepingTaskResponse(HousekeepingTaskBase):
     floor: Optional[int] = None
     status: HousekeepingTaskStatus = HousekeepingTaskStatus.PENDING
     inspected_by: Optional[str] = None
-    created_at: Optional[str | datetime] = None
-    started_at: Optional[str | datetime] = None
-    completed_at: Optional[str | datetime] = None
-    inspected_at: Optional[str | datetime] = None
+    created_at: Optional[str] = None
+    started_at: Optional[str] = None
+    completed_at: Optional[str] = None
+    inspected_at: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 

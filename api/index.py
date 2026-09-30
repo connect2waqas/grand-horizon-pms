@@ -1546,24 +1546,36 @@ def get_booking_by_id(booking_id: int, conn: sqlite3.Connection) -> BookingRespo
         "created_at": str(row["room_created_at"]) if row["room_created_at"] else None,
     }
 
+    raw_cid = row["check_in_date"]
+    parsed_cid = raw_cid if isinstance(raw_cid, date) else date.fromisoformat(str(raw_cid).split("T")[0])
+    raw_cod = row["check_out_date"]
+    parsed_cod = raw_cod if isinstance(raw_cod, date) else date.fromisoformat(str(raw_cod).split("T")[0])
+
+    g_type = GuaranteeType.GUARANTEED
+    if "guarantee_type" in row.keys() and row["guarantee_type"]:
+        try:
+            g_type = GuaranteeType(row["guarantee_type"])
+        except Exception:
+            g_type = GuaranteeType.GUARANTEED
+
     return BookingResponse(
         id=row["id"],
         guest_id=row["guest_id"],
         room_id=row["room_id"],
-        check_in_date=date.fromisoformat(row["check_in_date"]),
-        check_out_date=date.fromisoformat(row["check_out_date"]),
-        total_price=row["total_price"],
+        check_in_date=parsed_cid,
+        check_out_date=parsed_cod,
+        total_price=float(row["total_price"]),
         booking_status=BookingStatus(row["booking_status"]),
         created_at=str(row["created_at"]) if row["created_at"] else None,
         coupon_code=row["coupon_code"] if "coupon_code" in row.keys() else None,
-        discount_amount=row["discount_amount"] if "discount_amount" in row.keys() and row["discount_amount"] else 0.0,
-        adults=row["adults"] if "adults" in row.keys() and row["adults"] is not None else 1,
-        children=row["children"] if "children" in row.keys() and row["children"] is not None else 0,
-        estimated_arrival_time=row["estimated_arrival_time"] if "estimated_arrival_time" in row.keys() and row["estimated_arrival_time"] else "15:00",
-        special_requests=row["special_requests"] if "special_requests" in row.keys() and row["special_requests"] else "",
-        guarantee_type=GuaranteeType(row["guarantee_type"]) if ("guarantee_type" in row.keys() and row["guarantee_type"]) else GuaranteeType.GUARANTEED,
-        early_checkin_requested=bool(row["early_checkin_requested"]) if "early_checkin_requested" in row.keys() and row["early_checkin_requested"] else False,
-        late_checkout_requested=bool(row["late_checkout_requested"]) if "late_checkout_requested" in row.keys() and row["late_checkout_requested"] else False,
+        discount_amount=float(row["discount_amount"]) if ("discount_amount" in row.keys() and row["discount_amount"]) else 0.0,
+        adults=row["adults"] if ("adults" in row.keys() and row["adults"] is not None) else 1,
+        children=row["children"] if ("children" in row.keys() and row["children"] is not None) else 0,
+        estimated_arrival_time=row["estimated_arrival_time"] if ("estimated_arrival_time" in row.keys() and row["estimated_arrival_time"]) else "15:00",
+        special_requests=row["special_requests"] if ("special_requests" in row.keys() and row["special_requests"]) else "",
+        guarantee_type=g_type,
+        early_checkin_requested=bool(row["early_checkin_requested"]) if ("early_checkin_requested" in row.keys() and row["early_checkin_requested"]) else False,
+        late_checkout_requested=bool(row["late_checkout_requested"]) if ("late_checkout_requested" in row.keys() and row["late_checkout_requested"]) else False,
         room=row_to_room_response(r_dict),
         guest=GuestResponse(
             id=row["guest_id"],

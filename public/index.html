@@ -298,6 +298,17 @@
 
           <form id="bookingForm" class="booking-form" novalidate>
             
+            <!-- Module 2: Intelligent Auto-Assign Option -->
+            <div class="auto-assign-bar">
+              <button type="button" id="btnAutoAssign" class="btn btn-secondary btn-auto-assign" title="Intelligently recommends and selects the optimal available room for these dates">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                </svg>
+                Auto-Assign Optimal Room
+              </button>
+              <span id="autoAssignBadge" class="auto-assign-badge hidden"></span>
+            </div>
+
             <!-- Streamlined Target Room Banner (Replaces redundant dropdown) -->
             <div class="form-control">
               <label>Target Accommodation <span class="required">*</span></label>
@@ -323,6 +334,50 @@
               </div>
             </div>
 
+            <!-- Party Size & Capacity (Module 2 Deepening) -->
+            <div class="form-row">
+              <div class="form-control">
+                <label for="bookingAdults">Adults <span class="required">*</span></label>
+                <input type="number" id="bookingAdults" name="adults" min="1" max="10" value="1" required>
+              </div>
+              <div class="form-control">
+                <label for="bookingChildren">Children</label>
+                <input type="number" id="bookingChildren" name="children" min="0" max="10" value="0">
+              </div>
+            </div>
+
+            <!-- Arrival Time & Guarantee Policy (Module 2 Deepening) -->
+            <div class="form-row">
+              <div class="form-control">
+                <label for="bookingETA">Estimated Arrival (ETA)</label>
+                <input type="time" id="bookingETA" name="estimated_arrival_time" value="15:00">
+              </div>
+              <div class="form-control">
+                <label for="bookingGuarantee">Guarantee Policy</label>
+                <select id="bookingGuarantee" name="guarantee_type">
+                  <option value="Guaranteed" selected>Guaranteed (Secured)</option>
+                  <option value="Non-Guaranteed">Non-Guaranteed (6 PM Release)</option>
+                  <option value="Deposit Required">Deposit Required</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Early / Late Check Options -->
+            <div class="form-row checkbox-dual-row">
+              <div class="filter-field-checkbox">
+                <label for="bookingEarlyCheckin" class="checkbox-label">
+                  <input type="checkbox" id="bookingEarlyCheckin" name="early_checkin_requested">
+                  <span>Early Check-In</span>
+                </label>
+              </div>
+              <div class="filter-field-checkbox">
+                <label for="bookingLateCheckout" class="checkbox-label">
+                  <input type="checkbox" id="bookingLateCheckout" name="late_checkout_requested">
+                  <span>Late Check-Out</span>
+                </label>
+              </div>
+            </div>
+
             <!-- Guest Personal Details -->
             <div class="form-row">
               <div class="form-control">
@@ -343,6 +398,12 @@
             <div class="form-control">
               <label for="guestPhone">Phone Number <span class="required">*</span></label>
               <input type="tel" id="guestPhone" name="phone" placeholder="+1 (555) 018-9281" required>
+            </div>
+
+            <!-- Special Guest Requests & Room Preferences (Module 2 Deepening) -->
+            <div class="form-control">
+              <label for="bookingSpecialRequests">Special Requests & Preferences</label>
+              <textarea id="bookingSpecialRequests" name="special_requests" rows="2" placeholder="e.g. High floor away from elevator, feather-free hypoallergenic pillows, quiet courtyard view..." style="resize: vertical; font-size: 13px;"></textarea>
             </div>
 
             <!-- Module 11: Promotional Coupon & Dynamic Pricing Engine -->

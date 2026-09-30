@@ -46,11 +46,14 @@ from database import (
 from schemas import (
     AmenityResponse,
     AuditLogResponse,
+    AutoAssignRequest,
+    AutoAssignResponse,
     BookingCancelResponse,
     BookingCheckoutResponse,
     BookingCreate,
     BookingResponse,
     BookingStatus,
+    GuaranteeType,
     CouponCreate,
     CouponResponse,
     CouponValidateRequest,
@@ -933,7 +936,7 @@ def _create_booking_impl(
 
     # 1. Fetch Room Details
     cursor.execute(
-        "SELECT id, room_number, room_type, price_per_night, status, created_at FROM Rooms WHERE id = ?;",
+        "SELECT r.* FROM Rooms r WHERE r.id = ?;",
         (booking_data.room_id,),
     )
     room = cursor.fetchone()
@@ -948,6 +951,15 @@ def _create_booking_impl(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Room {room['room_number']} is currently out of service (Maintenance).",
         )
+
+    # 1b. Max Occupancy Enforcement (Module 2 Deepening)
+    total_guests = booking_data.adults + booking_data.children
+    if "max_occupancy" in room.keys() and room["max_occupancy"] is not None:
+        if total_guests > room["max_occupancy"]:
+            raise HTTPException(
+                status_code=getattr(status, "HTTP_422_UNPROCESSABLE_CONTENT", 422),
+                detail=f"Party size ({total_guests} guests: {booking_data.adults} adults, {booking_data.children} children) exceeds maximum room capacity of {room['max_occupancy']} for Room {room['room_number']}.",
+            )
 
     # 2. Check for Overlapping Bookings (Double-Booking Prevention)
     cursor.execute(
@@ -1080,6 +1092,26 @@ def _create_booking_impl(
             cursor.execute("ALTER TABLE Bookings ADD COLUMN coupon_code TEXT DEFAULT NULL;")
         if "discount_amount" not in b_cols:
             cursor.execute("ALTER TABLE Bookings ADD COLUMN discount_amount REAL NOT NULL DEFAULT 0.0;")
+        if "adults" not in b_cols:
+            cursor.execute("ALTER TABLE Bookings ADD COLUMN adults INTEGER NOT NULL DEFAULT 1;")
+        if "children" not in b_cols:
+            cursor.execute("ALTER TABLE Bookings ADD COLUMN children INTEGER NOT NULL DEFAULT 0;")
+        if "estimated_arrival_time" not in b_cols:
+            cursor.execute("ALTER TABLE Bookings ADD COLUMN estimated_arrival_time TEXT DEFAULT '15:00';")
+        if "special_requests" not in b_cols:
+            cursor.execute("ALTER TABLE Bookings ADD COLUMN special_requests TEXT DEFAULT '';")
+        if "guarantee_type" not in b_cols:
+            cursor.execute("ALTER TABLE Bookings ADD COLUMN guarantee_type TEXT NOT NULL DEFAULT 'Guaranteed';")
+        if "early_checkin_requested" not in b_cols:
+            cursor.execute("ALTER TABLE Bookings ADD COLUMN early_checkin_requested INTEGER NOT NULL DEFAULT 0;")
+        if "late_checkout_requested" not in b_cols:
+            cursor.execute("ALTER TABLE Bookings ADD COLUMN late_checkout_requested INTEGER NOT NULL DEFAULT 0;")
+    else:
+        b_cols = {
+            "coupon_code", "discount_amount", "adults", "children",
+            "estimated_arrival_time", "special_requests", "guarantee_type",
+            "early_checkin_requested", "late_checkout_requested"
+        }
 
     quote = calculate_dynamic_pricing(
         room=room,
@@ -1109,21 +1141,50 @@ def _create_booking_impl(
         )
 
     # 6. Insert Booking Record
-    cursor.execute(
-        """
-        INSERT INTO Bookings (guest_id, room_id, check_in_date, check_out_date, total_price, booking_status, coupon_code, discount_amount)
-        VALUES (?, ?, ?, ?, ?, 'Confirmed', ?, ?);
-        """,
-        (
-            guest_id,
-            booking_data.room_id,
-            booking_data.check_in_date.isoformat(),
-            booking_data.check_out_date.isoformat(),
-            total_price,
-            applied_coupon,
-            discount_amount,
-        ),
-    )
+    if "adults" in b_cols:
+        cursor.execute(
+            """
+            INSERT INTO Bookings (
+                guest_id, room_id, check_in_date, check_out_date, total_price, booking_status,
+                coupon_code, discount_amount, adults, children, estimated_arrival_time, special_requests,
+                guarantee_type, early_checkin_requested, late_checkout_requested
+            )
+            VALUES (?, ?, ?, ?, ?, 'Confirmed', ?, ?, ?, ?, ?, ?, ?, ?, ?);
+            """,
+            (
+                guest_id,
+                booking_data.room_id,
+                booking_data.check_in_date.isoformat(),
+                booking_data.check_out_date.isoformat(),
+                total_price,
+                applied_coupon,
+                discount_amount,
+                booking_data.adults,
+                booking_data.children,
+                booking_data.estimated_arrival_time or "15:00",
+                booking_data.special_requests or "",
+                booking_data.guarantee_type.value,
+                1 if booking_data.early_checkin_requested else 0,
+                1 if booking_data.late_checkout_requested else 0,
+            ),
+        )
+    else:
+        cursor.execute(
+            """
+            INSERT INTO Bookings (guest_id, room_id, check_in_date, check_out_date, total_price, booking_status, coupon_code, discount_amount)
+            VALUES (?, ?, ?, ?, ?, 'Confirmed', ?, ?);
+            """,
+            (
+                guest_id,
+                booking_data.room_id,
+                booking_data.check_in_date.isoformat(),
+                booking_data.check_out_date.isoformat(),
+                total_price,
+                applied_coupon,
+                discount_amount,
+            ),
+        )
+
     booking_id = cursor.lastrowid
     if not booking_id:
         cursor.execute(
@@ -1162,6 +1223,11 @@ def _create_booking_impl(
             "stay_dates": f"{booking_data.check_in_date} to {booking_data.check_out_date}",
             "total_price": total_price,
             "coupon_code": applied_coupon,
+            "adults": booking_data.adults,
+            "children": booking_data.children,
+            "guarantee_type": booking_data.guarantee_type.value,
+            "estimated_arrival_time": booking_data.estimated_arrival_time,
+            "special_requests": booking_data.special_requests,
         },
         actor="Front Desk Agent",
     )
@@ -1183,14 +1249,14 @@ def _create_booking_impl(
         created_at=str(booking_created_at),
         coupon_code=applied_coupon,
         discount_amount=discount_amount,
-        room=RoomResponse(
-            id=room["id"],
-            room_number=room["room_number"],
-            room_type=room["room_type"],
-            price_per_night=room["price_per_night"],
-            status=room["status"],
-            created_at=str(room["created_at"]) if room["created_at"] else None,
-        ),
+        adults=booking_data.adults,
+        children=booking_data.children,
+        estimated_arrival_time=booking_data.estimated_arrival_time,
+        special_requests=booking_data.special_requests or "",
+        guarantee_type=booking_data.guarantee_type,
+        early_checkin_requested=booking_data.early_checkin_requested,
+        late_checkout_requested=booking_data.late_checkout_requested,
+        room=row_to_room_response(room),
         guest=GuestResponse(
             id=guest_record["id"],
             first_name=guest_record["first_name"],
@@ -1232,6 +1298,145 @@ def create_booking(
 
 
 
+@app.post(
+    "/api/bookings/auto-assign",
+    response_model=AutoAssignResponse,
+    summary="Intelligently auto-assign optimal room for requested stay",
+    tags=["Bookings"],
+)
+@app.post(
+    "/bookings/auto-assign",
+    response_model=AutoAssignResponse,
+    include_in_schema=False,
+)
+def auto_assign_room(
+    request: AutoAssignRequest,
+    conn: sqlite3.Connection = Depends(get_db),
+):
+    """
+    Intelligent room auto-assignment engine based on:
+    - Availability over requested date interval
+    - Room capacity requirement (party size: adults + children <= room max_occupancy)
+    - Category match (if requested)
+    - Floor level preference (if requested)
+    - Housekeeping inspection priority (prefer Inspected > Clean > Touch-up Required > Dirty)
+    - Operational status (Available > Cleaning)
+    - Minimal wasted capacity fit
+    """
+    cursor = conn.cursor()
+    party_size = request.adults + request.children
+
+    # 1. Fetch rooms that are not in maintenance
+    cursor.execute("""
+        SELECT r.*
+        FROM Rooms r
+        WHERE r.status != 'Maintenance';
+    """)
+    all_candidate_rooms = [dict(r) for r in cursor.fetchall()]
+
+    # 2. Exclude rooms with date conflicts
+    available_candidates = []
+    for r in all_candidate_rooms:
+        cursor.execute(
+            """
+            SELECT COUNT(*) as conflicts
+            FROM Bookings
+            WHERE room_id = ?
+              AND booking_status IN ('Confirmed', 'Checked-in')
+              AND check_in_date < ?
+              AND check_out_date > ?;
+            """,
+            (r["id"], request.check_out_date.isoformat(), request.check_in_date.isoformat()),
+        )
+        conflicts = cursor.fetchone()["conflicts"]
+        if conflicts == 0:
+            available_candidates.append(r)
+
+    # 3. Filter candidates by capacity & category
+    filtered = []
+    for r in available_candidates:
+        max_occ = r.get("max_occupancy") or 2
+        if max_occ < party_size:
+            continue
+        if request.room_type and r.get("room_type") != request.room_type.value:
+            continue
+        filtered.append(r)
+
+    if not filtered:
+        return AutoAssignResponse(
+            assigned_room=None,
+            match_score=0,
+            criteria_applied=[
+                f"Dates {request.check_in_date} to {request.check_out_date}",
+                f"Party size of {party_size} guests",
+                f"No eligible vacant room found matching capacity and category"
+            ],
+            available_alternatives=[],
+        )
+
+    # 4. Score each room candidate
+    criteria_applied = [
+        f"Available from {request.check_in_date} to {request.check_out_date}",
+        f"Capacity fits {party_size} guests (Adults: {request.adults}, Children: {request.children})",
+    ]
+    if request.room_type:
+        criteria_applied.append(f"Category matched: {request.room_type.value}")
+    if request.floor:
+        criteria_applied.append(f"Floor preference evaluated: Level {request.floor}")
+    if request.prefer_inspected:
+        criteria_applied.append("Prioritizing QA Inspected rooms for immediate check-in")
+
+    scored_rooms = []
+    for r in filtered:
+        score = 50  # Base availability score
+
+        # Cleanliness priority
+        c_status = r.get("cleanliness_status") or "Inspected"
+        if c_status == "Inspected":
+            score += 30
+        elif c_status == "Clean":
+            score += 20
+        elif c_status == "Touch-up Required":
+            score += 10
+
+        # Operational status priority
+        if r.get("status") == "Available":
+            score += 20
+
+        # Floor preference match
+        if request.floor and r.get("floor") == request.floor:
+            score += 25
+
+        # Capacity fit (prefer exact capacity to avoid burning suites on single travelers)
+        max_occ = r.get("max_occupancy") or 2
+        diff = max_occ - party_size
+        if diff == 0:
+            score += 15
+        elif diff == 1:
+            score += 10
+        elif diff <= 2:
+            score += 5
+
+        # Clamp score between 0 and 100
+        normalized_score = min(100, max(0, score))
+        scored_rooms.append((normalized_score, r))
+
+    # Sort candidates descending by score, then room_number ascending
+    scored_rooms.sort(key=lambda x: (x[0], -int(x[1].get("room_number", 0))), reverse=True)
+
+    best_score, best_room = scored_rooms[0]
+    assigned_response = row_to_room_response(best_room)
+
+    alternatives = [row_to_room_response(rm) for _, rm in scored_rooms[1:4]]
+
+    return AutoAssignResponse(
+        assigned_room=assigned_response,
+        match_score=best_score,
+        criteria_applied=criteria_applied,
+        available_alternatives=alternatives,
+    )
+
+
 # ==========================================
 # Module 9: Reservation Lifecycle & Checkout Engine
 # ==========================================
@@ -1246,13 +1451,39 @@ def get_booking_by_id(booking_id: int, conn: sqlite3.Connection) -> BookingRespo
             cursor.execute("ALTER TABLE Bookings ADD COLUMN coupon_code TEXT DEFAULT NULL;")
         if "discount_amount" not in b_cols:
             cursor.execute("ALTER TABLE Bookings ADD COLUMN discount_amount REAL NOT NULL DEFAULT 0.0;")
+        if "adults" not in b_cols:
+            cursor.execute("ALTER TABLE Bookings ADD COLUMN adults INTEGER NOT NULL DEFAULT 1;")
+        if "children" not in b_cols:
+            cursor.execute("ALTER TABLE Bookings ADD COLUMN children INTEGER NOT NULL DEFAULT 0;")
+        if "estimated_arrival_time" not in b_cols:
+            cursor.execute("ALTER TABLE Bookings ADD COLUMN estimated_arrival_time TEXT DEFAULT '15:00';")
+        if "special_requests" not in b_cols:
+            cursor.execute("ALTER TABLE Bookings ADD COLUMN special_requests TEXT DEFAULT '';")
+        if "guarantee_type" not in b_cols:
+            cursor.execute("ALTER TABLE Bookings ADD COLUMN guarantee_type TEXT NOT NULL DEFAULT 'Guaranteed';")
+        if "early_checkin_requested" not in b_cols:
+            cursor.execute("ALTER TABLE Bookings ADD COLUMN early_checkin_requested INTEGER NOT NULL DEFAULT 0;")
+        if "late_checkout_requested" not in b_cols:
+            cursor.execute("ALTER TABLE Bookings ADD COLUMN late_checkout_requested INTEGER NOT NULL DEFAULT 0;")
+
+    if not IS_POSTGRES:
+        cursor.execute("PRAGMA table_info(Rooms);")
+        r_cols = {r[1] for r in cursor.fetchall()}
+    else:
+        r_cols = {"floor", "max_occupancy", "bed_type", "view_type", "sq_meters", "is_smoking", "cleanliness_status", "lock_reason"}
+
+    extra_room_fields = []
+    for c in ["floor", "max_occupancy", "bed_type", "view_type", "sq_meters", "is_smoking", "cleanliness_status", "lock_reason"]:
+        if c in r_cols:
+            extra_room_fields.append(f"r.{c}")
+    extra_room_sql = (", " + ", ".join(extra_room_fields)) if extra_room_fields else ""
 
     cursor.execute(
-        """
-        SELECT b.id, b.guest_id, b.room_id, b.check_in_date, b.check_out_date, b.total_price, b.booking_status, b.created_at,
-               b.coupon_code, b.discount_amount,
+        f"""
+        SELECT b.*,
                g.first_name, g.last_name, g.email, g.phone, g.vip_tier, g.notes as guest_notes, g.created_at as guest_created_at,
                r.room_number, r.room_type, r.price_per_night, r.status as room_status, r.created_at as room_created_at
+               {extra_room_sql}
         FROM Bookings b
         JOIN Guests g ON b.guest_id = g.id
         JOIN Rooms r ON b.room_id = r.id
@@ -1289,6 +1520,23 @@ def get_booking_by_id(booking_id: int, conn: sqlite3.Connection) -> BookingRespo
         for ar in amenity_rows
     ]
 
+    r_dict = {
+        "id": row["room_id"],
+        "room_number": row["room_number"],
+        "room_type": row["room_type"],
+        "price_per_night": row["price_per_night"],
+        "status": row["room_status"],
+        "floor": row["floor"] if "floor" in row.keys() else 1,
+        "max_occupancy": row["max_occupancy"] if "max_occupancy" in row.keys() else 2,
+        "bed_type": row["bed_type"] if "bed_type" in row.keys() else "1 King Bed",
+        "view_type": row["view_type"] if "view_type" in row.keys() else "City Skyline",
+        "sq_meters": row["sq_meters"] if "sq_meters" in row.keys() else 35,
+        "is_smoking": row["is_smoking"] if "is_smoking" in row.keys() else 0,
+        "cleanliness_status": row["cleanliness_status"] if "cleanliness_status" in row.keys() else "Inspected",
+        "lock_reason": row["lock_reason"] if "lock_reason" in row.keys() else None,
+        "created_at": str(row["room_created_at"]) if row["room_created_at"] else None,
+    }
+
     return BookingResponse(
         id=row["id"],
         guest_id=row["guest_id"],
@@ -1300,14 +1548,14 @@ def get_booking_by_id(booking_id: int, conn: sqlite3.Connection) -> BookingRespo
         created_at=str(row["created_at"]) if row["created_at"] else None,
         coupon_code=row["coupon_code"] if "coupon_code" in row.keys() else None,
         discount_amount=row["discount_amount"] if "discount_amount" in row.keys() and row["discount_amount"] else 0.0,
-        room=RoomResponse(
-            id=row["room_id"],
-            room_number=row["room_number"],
-            room_type=row["room_type"],
-            price_per_night=row["price_per_night"],
-            status=row["room_status"],
-            created_at=str(row["room_created_at"]) if row["room_created_at"] else None,
-        ),
+        adults=row["adults"] if "adults" in row.keys() and row["adults"] is not None else 1,
+        children=row["children"] if "children" in row.keys() and row["children"] is not None else 0,
+        estimated_arrival_time=row["estimated_arrival_time"] if "estimated_arrival_time" in row.keys() and row["estimated_arrival_time"] else "15:00",
+        special_requests=row["special_requests"] if "special_requests" in row.keys() and row["special_requests"] else "",
+        guarantee_type=GuaranteeType(row["guarantee_type"]) if ("guarantee_type" in row.keys() and row["guarantee_type"]) else GuaranteeType.GUARANTEED,
+        early_checkin_requested=bool(row["early_checkin_requested"]) if "early_checkin_requested" in row.keys() and row["early_checkin_requested"] else False,
+        late_checkout_requested=bool(row["late_checkout_requested"]) if "late_checkout_requested" in row.keys() and row["late_checkout_requested"] else False,
+        room=row_to_room_response(r_dict),
         guest=GuestResponse(
             id=row["guest_id"],
             first_name=row["first_name"],
@@ -1350,6 +1598,25 @@ def get_bookings(
     cursor.execute(query, params)
     rows = cursor.fetchall()
     return [get_booking_by_id(row["id"], conn) for row in rows]
+
+
+@app.get(
+    "/api/bookings/{booking_id}",
+    response_model=BookingResponse,
+    summary="Get single reservation details by ID",
+    tags=["Bookings"],
+)
+@app.get(
+    "/bookings/{booking_id}",
+    response_model=BookingResponse,
+    include_in_schema=False,
+)
+def get_single_booking(
+    booking_id: int,
+    conn: sqlite3.Connection = Depends(get_db),
+):
+    """Retrieves full booking dossier by unique reservation ID."""
+    return get_booking_by_id(booking_id, conn)
 
 
 @app.post(

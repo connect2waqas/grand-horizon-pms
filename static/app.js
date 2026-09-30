@@ -48,6 +48,15 @@ const selectedRoomRate = document.getElementById("selectedRoomRate");
 
 const bookingCheckIn = document.getElementById("bookingCheckIn");
 const bookingCheckOut = document.getElementById("bookingCheckOut");
+const btnAutoAssign = document.getElementById("btnAutoAssign");
+const autoAssignBadge = document.getElementById("autoAssignBadge");
+const bookingAdults = document.getElementById("bookingAdults");
+const bookingChildren = document.getElementById("bookingChildren");
+const bookingETA = document.getElementById("bookingETA");
+const bookingGuarantee = document.getElementById("bookingGuarantee");
+const bookingEarlyCheckin = document.getElementById("bookingEarlyCheckin");
+const bookingLateCheckout = document.getElementById("bookingLateCheckout");
+const bookingSpecialRequests = document.getElementById("bookingSpecialRequests");
 const guestFirstName = document.getElementById("guestFirstName");
 const guestLastName = document.getElementById("guestLastName");
 const guestEmail = document.getElementById("guestEmail");
@@ -243,6 +252,11 @@ function setupEventListeners() {
         }
       });
     });
+  }
+
+  // Module 2: Auto-Assign room trigger
+  if (btnAutoAssign) {
+    btnAutoAssign.addEventListener("click", handleAutoAssign);
   }
 
   // Form submission
@@ -819,9 +833,9 @@ function formatShortDate(dateStr) {
 /**
  * Selects a room, updates the banner, and focuses the check-in input field
  */
-function selectRoom(roomId, shouldFocus = true) {
-  const room = allRoomsData.find((r) => r.id === roomId);
-  if (!room || room.status !== "Available") return;
+function selectRoom(roomId, shouldFocus = true, roomObj = null) {
+  const room = roomObj || allRoomsData.find((r) => r.id === roomId);
+  if (!room || room.status === "Maintenance" || room.status === "Out of Order") return;
 
   selectedRoomId = roomId;
   selectedRoomIdInput.value = roomId;
@@ -847,6 +861,77 @@ function selectRoom(roomId, shouldFocus = true) {
     bookingCheckIn.focus();
     if (window.innerWidth <= 1024) {
       bookingForm.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }
+}
+
+/**
+ * Module 2: Intelligent Room Auto-Assignment Algorithm
+ * Evaluates candidate inventory based on party headcount, room capacity, floor preference, and cleanliness.
+ */
+async function handleAutoAssign() {
+  const checkIn = bookingCheckIn ? bookingCheckIn.value : null;
+  const checkOut = bookingCheckOut ? bookingCheckOut.value : null;
+  const adults = bookingAdults ? parseInt(bookingAdults.value || 1, 10) : 1;
+  const children = bookingChildren ? parseInt(bookingChildren.value || 0, 10) : 0;
+  const prefType = filterType ? filterType.value.trim() : null;
+  const prefFloor = filterFloor && filterFloor.value ? parseInt(filterFloor.value, 10) : null;
+
+  if (!checkIn || !checkOut) {
+    showToast("Please choose check-in and check-out dates before auto-assigning.", "info");
+    if (bookingCheckIn) bookingCheckIn.focus();
+    return;
+  }
+
+  if (checkOut <= checkIn) {
+    showToast("Check-out date must be strictly after check-in date.", "error");
+    return;
+  }
+
+  const payload = {
+    check_in_date: checkIn,
+    check_out_date: checkOut,
+    adults: adults,
+    children: children,
+    preferred_room_type: prefType || null,
+    preferred_floor: prefFloor || null,
+  };
+
+  if (btnAutoAssign) {
+    btnAutoAssign.disabled = true;
+    btnAutoAssign.textContent = "Analyzing inventory...";
+  }
+
+  try {
+    const res = await fetch("/api/bookings/auto-assign", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      showToast(data.detail || "No suitable room found matching party size and dates.", "error");
+      if (autoAssignBadge) autoAssignBadge.classList.add("hidden");
+      return;
+    }
+
+    const assigned = data.assigned_room;
+    selectRoom(assigned.id, false, assigned);
+
+    if (autoAssignBadge) {
+      autoAssignBadge.innerHTML = `✨ <strong>Smart Assigned: Room ${assigned.room_number}</strong> (${assigned.room_type}) • ${escapeHtml(data.assignment_reason || 'Optimal Fit')}`;
+      autoAssignBadge.classList.remove("hidden");
+    }
+
+    showToast(`Smart Match: Room ${assigned.room_number} auto-assigned (Score: ${data.score})`, "success");
+  } catch (err) {
+    console.error("Auto-assign error:", err);
+    showToast(`Auto-assignment failed: ${err.message}`, "error");
+  } finally {
+    if (btnAutoAssign) {
+      btnAutoAssign.disabled = false;
+      btnAutoAssign.textContent = "⚡ Auto-Assign Best Room";
     }
   }
 }
@@ -1104,6 +1189,13 @@ async function handleBookingSubmit(event) {
     room_id: selectedRoomId,
     check_in_date: checkIn,
     check_out_date: checkOut,
+    adults: bookingAdults ? parseInt(bookingAdults.value || 1, 10) : 1,
+    children: bookingChildren ? parseInt(bookingChildren.value || 0, 10) : 0,
+    estimated_arrival_time: bookingETA ? (bookingETA.value || "15:00") : "15:00",
+    guarantee_type: bookingGuarantee ? bookingGuarantee.value : "Guaranteed",
+    early_checkin_requested: bookingEarlyCheckin ? bookingEarlyCheckin.checked : false,
+    late_checkout_requested: bookingLateCheckout ? bookingLateCheckout.checked : false,
+    special_requests: bookingSpecialRequests ? bookingSpecialRequests.value.trim() : "",
     guest: {
       first_name: firstName,
       last_name: lastName,
@@ -1137,6 +1229,10 @@ async function handleBookingSubmit(event) {
     guestLastName.value = "";
     guestEmail.value = "";
     guestPhone.value = "";
+    if (bookingSpecialRequests) bookingSpecialRequests.value = "";
+    if (bookingEarlyCheckin) bookingEarlyCheckin.checked = false;
+    if (bookingLateCheckout) bookingLateCheckout.checked = false;
+    if (autoAssignBadge) autoAssignBadge.classList.add("hidden");
     if (couponCodeInput) couponCodeInput.value = "";
     if (couponStatusMessage) couponStatusMessage.classList.add("hidden");
     fetchKPIs();
@@ -1162,6 +1258,28 @@ function showBookingReceipt(booking) {
     `;
   }
 
+  const adults = booking.adults || 1;
+  const children = booking.children || 0;
+  const partyText = `${adults} Adult${adults > 1 ? 's' : ''}${children > 0 ? ` + ${children} Child${children > 1 ? 'ren' : ''}` : ''}`;
+  const guarantee = booking.guarantee_type || "Guaranteed";
+  const eta = booking.estimated_arrival_time || "15:00";
+  const scheduleRequests = [];
+  if (booking.early_checkin_requested) scheduleRequests.push("Early Check-in");
+  if (booking.late_checkout_requested) scheduleRequests.push("Late Check-out");
+  const scheduleHtml = scheduleRequests.length > 0 ? `
+    <div class="receipt-row">
+      <span class="receipt-label">Schedule Requests</span>
+      <span class="receipt-value">${scheduleRequests.join(" • ")}</span>
+    </div>
+  ` : "";
+
+  const specialReqHtml = booking.special_requests ? `
+    <div class="receipt-row">
+      <span class="receipt-label">Special Requests</span>
+      <span class="receipt-value" style="font-style: italic;">${escapeHtml(booking.special_requests)}</span>
+    </div>
+  ` : "";
+
   modalDetails.innerHTML = `
     <div class="receipt-grid">
       <div class="receipt-row">
@@ -1173,6 +1291,10 @@ function showBookingReceipt(booking) {
         <span class="receipt-value" style="color: var(--status-available-text);">${booking.booking_status}</span>
       </div>
       <div class="receipt-row">
+        <span class="receipt-label">Guarantee Policy</span>
+        <span class="receipt-value"><span class="booking-guarantee-pill ${guarantee === 'Guaranteed' ? 'guarantee-firm' : 'guarantee-tentative'}">${guarantee}</span></span>
+      </div>
+      <div class="receipt-row">
         <span class="receipt-label">Room</span>
         <span class="receipt-value">Room ${booking.room ? booking.room.room_number : booking.room_id} (${booking.room ? booking.room.room_type : ""})</span>
       </div>
@@ -1181,9 +1303,15 @@ function showBookingReceipt(booking) {
         <span class="receipt-value">${booking.guest ? booking.guest.first_name + " " + booking.guest.last_name : "Guest #" + booking.guest_id}</span>
       </div>
       <div class="receipt-row">
-        <span class="receipt-label">Dates</span>
-        <span class="receipt-value">${booking.check_in_date} to ${booking.check_out_date}</span>
+        <span class="receipt-label">Party Headcount</span>
+        <span class="receipt-value">${partyText}</span>
       </div>
+      <div class="receipt-row">
+        <span class="receipt-label">Dates & ETA</span>
+        <span class="receipt-value">${booking.check_in_date} to ${booking.check_out_date} (ETA: ${eta})</span>
+      </div>
+      ${scheduleHtml}
+      ${specialReqHtml}
       ${discountHtml}
       <div class="receipt-row receipt-total">
         <span class="receipt-label">Total Amount</span>
@@ -1312,17 +1440,32 @@ function renderBookings(bookings) {
     }
     actionButtons += `</div>`;
 
-    const guestName = b.guest ? `${b.guest.first_name} ${b.guest.last_name}` : `Guest #${b.guest_id}`;
-    const guestContact = b.guest ? (b.guest.email || b.guest.phone || "") : "";
+    const guestName = b.guest ? `${escapeHtml(b.guest.first_name)} ${escapeHtml(b.guest.last_name)}` : `Guest #${b.guest_id}`;
+    const guestContact = b.guest ? (escapeHtml(b.guest.email || b.guest.phone || "")) : "";
     const roomNumber = b.room ? b.room.room_number : b.room_id;
     const roomType = b.room ? b.room.room_type : "";
+
+    const adults = b.adults || 1;
+    const children = b.children || 0;
+    const partyBadge = `<span class="booking-headcount-badge" title="Party: ${adults} Adults, ${children} Children">👥 ${adults}A${children > 0 ? `+${children}C` : ''}</span>`;
+    const guarantee = b.guarantee_type || "Guaranteed";
+    const guaranteeBadge = `<span class="booking-guarantee-pill ${guarantee === 'Guaranteed' ? 'guarantee-firm' : 'guarantee-tentative'}">${escapeHtml(guarantee)}</span>`;
+    
+    let etaDetail = `🕒 ETA ${escapeHtml(b.estimated_arrival_time || '15:00')}`;
+    if (b.early_checkin_requested) etaDetail += ` • Early`;
+    if (b.late_checkout_requested) etaDetail += ` • Late`;
+    const etaText = `<span class="booking-eta-sub">${etaDetail}</span>`;
+
+    const specialRequestSnippet = b.special_requests ? `<div class="booking-special-req-snippet" title="${escapeHtml(b.special_requests)}">📝 ${escapeHtml(b.special_requests.length > 25 ? b.special_requests.slice(0, 25) + '...' : b.special_requests)}</div>` : '';
 
     tr.innerHTML = `
       <td><span class="table-folio-id">#${b.id}</span></td>
       <td>
         <div class="table-guest-meta">
-          <span class="table-guest-name">${guestName}</span>
+          <div><span class="table-guest-name">${guestName}</span> ${guaranteeBadge}</div>
           <span class="table-guest-contact">${guestContact}</span>
+          <div>${partyBadge}</div>
+          ${specialRequestSnippet}
         </div>
       </td>
       <td>
@@ -1334,6 +1477,7 @@ function renderBookings(bookings) {
       <td>
         <div class="table-dates-meta">
           <span>${b.check_in_date} → ${b.check_out_date}</span>
+          ${etaText}
         </div>
       </td>
       <td><span class="table-price">$${b.total_price.toFixed(2)}</span></td>

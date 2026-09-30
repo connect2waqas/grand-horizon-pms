@@ -95,6 +95,15 @@ CREATE TABLE IF NOT EXISTS public.bookings (
     CONSTRAINT check_dates_validity CHECK (check_out_date > check_in_date)
 );
 
+-- Schema migration columns for existing Supabase installations (Module 2 Deepening)
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS adults INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS children INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS estimated_arrival_time VARCHAR(20) DEFAULT '15:00';
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS special_requests TEXT DEFAULT '';
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS guarantee_type VARCHAR(30) NOT NULL DEFAULT 'Guaranteed';
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS early_checkin_requested BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS late_checkout_requested BOOLEAN NOT NULL DEFAULT FALSE;
+
 -- ------------------------------------------------------------------------------
 -- 6. Table: bookingamenities (Many-to-Many Junction for Pre-Booked Amenities)
 -- ------------------------------------------------------------------------------

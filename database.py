@@ -304,12 +304,44 @@ def init_db() -> None:
         check_out_date DATE NOT NULL,
         total_price REAL NOT NULL CHECK(total_price >= 0),
         booking_status TEXT NOT NULL DEFAULT 'Confirmed' CHECK(booking_status IN ('Confirmed', 'Checked-in', 'Checked-out', 'Cancelled')),
+        coupon_code TEXT DEFAULT NULL,
+        discount_amount REAL NOT NULL DEFAULT 0.0,
+        adults INTEGER NOT NULL DEFAULT 1,
+        children INTEGER NOT NULL DEFAULT 0,
+        estimated_arrival_time TEXT DEFAULT '15:00',
+        special_requests TEXT DEFAULT '',
+        guarantee_type TEXT NOT NULL DEFAULT 'Guaranteed',
+        early_checkin_requested INTEGER NOT NULL DEFAULT 0,
+        late_checkout_requested INTEGER NOT NULL DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (guest_id) REFERENCES Guests(id) ON DELETE CASCADE,
         FOREIGN KEY (room_id) REFERENCES Rooms(id) ON DELETE RESTRICT,
         CHECK (check_out_date > check_in_date)
     );
     """)
+
+    # Non-destructive migrations for existing Bookings table (Module 2 Deepening)
+    if not IS_POSTGRES:
+        cursor.execute("PRAGMA table_info(Bookings);")
+        existing_booking_cols = {row[1] for row in cursor.fetchall()}
+        if "coupon_code" not in existing_booking_cols:
+            cursor.execute("ALTER TABLE Bookings ADD COLUMN coupon_code TEXT DEFAULT NULL;")
+        if "discount_amount" not in existing_booking_cols:
+            cursor.execute("ALTER TABLE Bookings ADD COLUMN discount_amount REAL NOT NULL DEFAULT 0.0;")
+        if "adults" not in existing_booking_cols:
+            cursor.execute("ALTER TABLE Bookings ADD COLUMN adults INTEGER NOT NULL DEFAULT 1;")
+        if "children" not in existing_booking_cols:
+            cursor.execute("ALTER TABLE Bookings ADD COLUMN children INTEGER NOT NULL DEFAULT 0;")
+        if "estimated_arrival_time" not in existing_booking_cols:
+            cursor.execute("ALTER TABLE Bookings ADD COLUMN estimated_arrival_time TEXT DEFAULT '15:00';")
+        if "special_requests" not in existing_booking_cols:
+            cursor.execute("ALTER TABLE Bookings ADD COLUMN special_requests TEXT DEFAULT '';")
+        if "guarantee_type" not in existing_booking_cols:
+            cursor.execute("ALTER TABLE Bookings ADD COLUMN guarantee_type TEXT NOT NULL DEFAULT 'Guaranteed';")
+        if "early_checkin_requested" not in existing_booking_cols:
+            cursor.execute("ALTER TABLE Bookings ADD COLUMN early_checkin_requested INTEGER NOT NULL DEFAULT 0;")
+        if "late_checkout_requested" not in existing_booking_cols:
+            cursor.execute("ALTER TABLE Bookings ADD COLUMN late_checkout_requested INTEGER NOT NULL DEFAULT 0;")
 
     # Table 4: Amenities (Catalog of bookable hotel add-ons)
     cursor.execute("""

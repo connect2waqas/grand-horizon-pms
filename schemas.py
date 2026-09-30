@@ -196,11 +196,27 @@ class AmenityResponse(AmenityBase):
 # ==========================================
 # Booking Schemas
 # ==========================================
+# Reservation & Booking Schemas (Module 2 Deepening)
+# ==========================================
+
+class GuaranteeType(str, Enum):
+    """Reservation guarantee policy classification."""
+    GUARANTEED = "Guaranteed"
+    NON_GUARANTEED = "Non-Guaranteed"
+    DEPOSIT_REQUIRED = "Deposit Required"
+
 
 class BookingBase(BaseModel):
-    """Base date attributes common across reservation models."""
+    """Base reservation attributes and realistic guest stay specifications."""
     check_in_date: date = Field(..., description="Check-in date (YYYY-MM-DD)")
     check_out_date: date = Field(..., description="Check-out date (YYYY-MM-DD)")
+    adults: int = Field(default=1, ge=1, le=10, description="Adult guest count (min 1)")
+    children: int = Field(default=0, ge=0, le=10, description="Child guest count")
+    estimated_arrival_time: Optional[str] = Field(default="15:00", description="Estimated arrival time (HH:MM format)")
+    special_requests: Optional[str] = Field(default="", max_length=500, description="Guest preferences, floor requests, or accessibility needs")
+    guarantee_type: GuaranteeType = Field(default=GuaranteeType.GUARANTEED, description="Reservation guarantee status")
+    early_checkin_requested: bool = Field(default=False, description="Early check-in priority flag")
+    late_checkout_requested: bool = Field(default=False, description="Late check-out request flag")
 
 
 class BookingCreate(BookingBase):
@@ -211,6 +227,8 @@ class BookingCreate(BookingBase):
       - Target room ID
       - Stay dates
       - Guest identity (either existing guest_id or new guest profile)
+      - Guest headcount (adults, children)
+      - Arrival timing and special requests
       - Optional list of selected amenity IDs
     
     Note: 'total_price' and 'id' are omitted here; they are securely calculated
@@ -253,11 +271,43 @@ class BookingResponse(BaseModel):
     created_at: Optional[str | datetime] = None
     coupon_code: Optional[str] = None
     discount_amount: float = 0.0
+    adults: int = 1
+    children: int = 0
+    estimated_arrival_time: Optional[str] = "15:00"
+    special_requests: Optional[str] = ""
+    guarantee_type: GuaranteeType = GuaranteeType.GUARANTEED
+    early_checkin_requested: bool = False
+    late_checkout_requested: bool = False
     room: Optional[RoomResponse] = None
     guest: Optional[GuestResponse] = None
     amenities: list[AmenityResponse] = Field(default_factory=list, description="Attached add-on amenities")
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class AutoAssignRequest(BaseModel):
+    """Request contract for intelligent room auto-assignment algorithm."""
+    check_in_date: date = Field(..., description="Desired check-in date")
+    check_out_date: date = Field(..., description="Desired check-out date")
+    room_type: Optional[RoomType] = Field(None, description="Preferred room category")
+    floor: Optional[int] = Field(None, ge=1, le=10, description="Preferred building floor level")
+    adults: int = Field(default=1, ge=1, le=10, description="Number of adult guests")
+    children: int = Field(default=0, ge=0, le=10, description="Number of child guests")
+    prefer_inspected: bool = Field(default=True, description="Prioritize rooms with Inspected cleanliness state")
+
+    @model_validator(mode="after")
+    def validate_dates(self) -> "AutoAssignRequest":
+        if self.check_out_date <= self.check_in_date:
+            raise ValueError("check_out_date must be strictly after check_in_date")
+        return self
+
+
+class AutoAssignResponse(BaseModel):
+    """Response contract returning the optimal room candidate and match explanation."""
+    assigned_room: Optional[RoomResponse] = Field(None, description="Optimal recommended room for reservation")
+    match_score: int = Field(..., description="Algorithmic match confidence score (0-100)")
+    criteria_applied: list[str] = Field(default_factory=list, description="Applied prioritization heuristics")
+    available_alternatives: list[RoomResponse] = Field(default_factory=list, description="Secondary available room candidates")
 
 
 # ==========================================

@@ -1507,17 +1507,22 @@ def get_booking_by_id(booking_id: int, conn: sqlite3.Connection) -> BookingRespo
             detail=f"Booking with ID {booking_id} not found.",
         )
 
-    cursor.execute(
-        """
-        SELECT a.id, a.name, ba.price_charged as price, a.description, a.created_at
-        FROM BookingAmenities ba
-        JOIN Amenities a ON ba.amenity_id = a.id
-        WHERE ba.booking_id = ?
-        ORDER BY a.id ASC;
-        """,
-        (booking_id,),
-    )
-    amenity_rows = cursor.fetchall()
+    amenity_rows = []
+    try:
+        cursor.execute(
+            """
+            SELECT a.id, a.name, ba.price_charged as price, a.description, a.created_at
+            FROM BookingAmenities ba
+            JOIN Amenities a ON ba.amenity_id = a.id
+            WHERE ba.booking_id = ?
+            ORDER BY a.id ASC;
+            """,
+            (booking_id,),
+        )
+        amenity_rows = cursor.fetchall()
+    except Exception:
+        amenity_rows = []
+
     amenities = [
         AmenityResponse(
             id=ar["id"],
@@ -1605,20 +1610,28 @@ def get_bookings(
     Retrieves all reservations including relational guest, room, and chosen amenities.
     Ordered by creation date descending.
     """
-    cursor = conn.cursor()
-    query = """
-    SELECT b.id
-    FROM Bookings b
-    """
-    params = []
-    if status_filter:
-        query += " WHERE b.booking_status = ?"
-        params.append(status_filter.value)
-    query += " ORDER BY b.id DESC;"
+    try:
+        cursor = conn.cursor()
+        query = """
+        SELECT b.id
+        FROM Bookings b
+        """
+        params = []
+        if status_filter:
+            query += " WHERE b.booking_status = ?"
+            params.append(status_filter.value)
+        query += " ORDER BY b.id DESC;"
 
-    cursor.execute(query, params)
-    rows = cursor.fetchall()
-    return [get_booking_by_id(row["id"], conn) for row in rows]
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+        return [get_booking_by_id(row["id"], conn) for row in rows]
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to list bookings: {type(exc).__name__}: {str(exc)}",
+        )
 
 
 @app.get(
@@ -1637,7 +1650,15 @@ def get_single_booking(
     conn: sqlite3.Connection = Depends(get_db),
 ):
     """Retrieves full booking dossier by unique reservation ID."""
-    return get_booking_by_id(booking_id, conn)
+    try:
+        return get_booking_by_id(booking_id, conn)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch booking #{booking_id}: {type(exc).__name__}: {str(exc)}",
+        )
 
 
 @app.post(

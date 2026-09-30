@@ -4106,9 +4106,18 @@ def get_housekeeping_tasks(
         END,
         t.id DESC;
     """
-    cursor.execute(query, params)
-    rows = cursor.fetchall()
-    return [row_to_housekeeping_task_response(r) for r in rows]
+    try:
+        if params:
+            cursor.execute(query, params)
+        else:
+            cursor.execute(query)
+        rows = cursor.fetchall()
+        return [row_to_housekeeping_task_response(r) for r in rows]
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"get_housekeeping_tasks error: {str(exc)}",
+        )
 
 
 @app.post(

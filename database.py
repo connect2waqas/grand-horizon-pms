@@ -113,7 +113,9 @@ class PostgresCursorWrapper:
         self.lastrowid = None
 
     def execute(self, query: str, params=None):
-        if params is not None:
+        if params is not None and len(params) == 0:
+            params = None
+        elif params is not None:
             query = query.replace("?", "%s")
 
         # Translate SQLite-specific date syntax to PostgreSQL
@@ -128,7 +130,10 @@ class PostgresCursorWrapper:
         if is_insert and "RETURNING" not in query.upper() and not is_booking_amenities:
             trimmed = query.rstrip().rstrip(";")
             returning_query = f"{trimmed} RETURNING id;"
-            self._cursor.execute(returning_query, params)
+            if params is not None:
+                self._cursor.execute(returning_query, params)
+            else:
+                self._cursor.execute(returning_query)
             try:
                 row = self._cursor.fetchone()
                 if row and "id" in row:
@@ -137,7 +142,10 @@ class PostgresCursorWrapper:
                 pass
             return self
 
-        self._cursor.execute(query, params)
+        if params is not None:
+            self._cursor.execute(query, params)
+        else:
+            self._cursor.execute(query)
         return self
 
     def executemany(self, query: str, params_list):

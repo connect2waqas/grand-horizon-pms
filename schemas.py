@@ -11,7 +11,7 @@ assigned IDs, calculated totals, and timestamps).
 from datetime import date, datetime
 from enum import Enum
 from typing import List, Optional
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 # ==========================================
@@ -31,6 +31,14 @@ class RoomStatus(str, Enum):
     OCCUPIED = "Occupied"
     MAINTENANCE = "Maintenance"
     CLEANING = "Cleaning"
+
+
+class CleanlinessStatus(str, Enum):
+    """Housekeeping inspection state of an accommodation."""
+    CLEAN = "Clean"
+    DIRTY = "Dirty"
+    INSPECTED = "Inspected"
+    TOUCH_UP_REQUIRED = "Touch-up Required"
 
 
 class BookingStatus(str, Enum):
@@ -57,7 +65,7 @@ class GuestBase(BaseModel):
     """Common attributes for Guest entities."""
     first_name: str = Field(..., min_length=1, max_length=50, description="Guest first name")
     last_name: str = Field(..., min_length=1, max_length=50, description="Guest last name")
-    email: EmailStr = Field(..., description="Unique email address for contact and lookup")
+    email: str = Field(..., description="Unique email address for contact and lookup")
     phone: str = Field(..., min_length=7, max_length=20, description="Phone number")
     vip_tier: VIPTier = Field(default=VIPTier.STANDARD, description="Guest VIP loyalty tier")
     notes: Optional[str] = Field(default="", max_length=1000, description="Guest preferences, dietary needs, or VIP requests")
@@ -72,7 +80,7 @@ class GuestUpdate(BaseModel):
     """Input schema for updating an existing guest profile, VIP tier, or preferences."""
     first_name: Optional[str] = Field(None, min_length=1, max_length=50)
     last_name: Optional[str] = Field(None, min_length=1, max_length=50)
-    email: Optional[EmailStr] = None
+    email: Optional[str] = None
     phone: Optional[str] = Field(None, min_length=7, max_length=20)
     vip_tier: Optional[VIPTier] = None
     notes: Optional[str] = Field(None, max_length=1000)
@@ -113,11 +121,19 @@ class GuestCRMResponse(BaseModel):
 # ==========================================
 
 class RoomBase(BaseModel):
-    """Common attributes for Room entities."""
+    """Common attributes for Room entities with realistic architectural specifications."""
     room_number: str = Field(..., min_length=1, max_length=10, description="Unique room identifier number")
     room_type: RoomType = Field(..., description="Room category")
     price_per_night: float = Field(..., gt=0.0, description="Nightly rate, strictly positive")
-    status: RoomStatus = Field(default=RoomStatus.AVAILABLE, description="Current room status")
+    status: RoomStatus = Field(default=RoomStatus.AVAILABLE, description="Current room operational status")
+    floor: int = Field(default=1, ge=1, le=50, description="Building floor level")
+    max_occupancy: int = Field(default=2, ge=1, le=10, description="Maximum permitted guest occupancy")
+    bed_type: str = Field(default="1 King Bed", description="Bed arrangement specification")
+    view_type: str = Field(default="City Skyline", description="Window / Balcony view outlook")
+    sq_meters: int = Field(default=35, ge=15, le=500, description="Room area in square meters")
+    is_smoking: bool = Field(default=False, description="Smoking policy")
+    cleanliness_status: CleanlinessStatus = Field(default=CleanlinessStatus.INSPECTED, description="Housekeeping inspection status")
+    lock_reason: Optional[str] = Field(default=None, description="Reason if locked or out of service")
 
 
 class RoomCreate(RoomBase):
@@ -137,6 +153,20 @@ class RoomResponse(RoomBase):
 class RoomStatusUpdate(BaseModel):
     """Schema for mutating room operational status (Housekeeping & Maintenance)."""
     status: RoomStatus = Field(..., description="Target operational status")
+    lock_reason: Optional[str] = Field(default=None, description="Operational lock explanation if out of service")
+
+
+class RoomHousekeepingUpdate(BaseModel):
+    """Schema for updating room cleanliness and inspection checklist."""
+    cleanliness_status: CleanlinessStatus = Field(..., description="Target housekeeping state")
+    inspected_by: Optional[str] = Field(default="Head Housekeeper", description="Inspector staff identifier")
+    notes: Optional[str] = Field(default="", description="Housekeeping inspection remarks")
+
+
+class RoomSpecificationResponse(RoomResponse):
+    """Detailed architectural and housekeeping dossier for room management."""
+    active_booking_id: Optional[int] = None
+    last_cleaned_at: Optional[str] = None
 
 
 # ==========================================

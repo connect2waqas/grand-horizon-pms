@@ -29,8 +29,26 @@ CREATE TABLE IF NOT EXISTS public.rooms (
     room_type VARCHAR(50) NOT NULL CHECK (room_type IN ('Single', 'Double', 'Family Suite')),
     price_per_night NUMERIC(10, 2) NOT NULL CHECK (price_per_night > 0),
     status VARCHAR(30) NOT NULL DEFAULT 'Available' CHECK (status IN ('Available', 'Occupied', 'Cleaning', 'Maintenance')),
+    floor INTEGER NOT NULL DEFAULT 1,
+    max_occupancy INTEGER NOT NULL DEFAULT 2,
+    bed_type VARCHAR(100) NOT NULL DEFAULT '1 King Bed',
+    view_type VARCHAR(100) NOT NULL DEFAULT 'City Skyline',
+    sq_meters INTEGER NOT NULL DEFAULT 35,
+    is_smoking BOOLEAN NOT NULL DEFAULT FALSE,
+    cleanliness_status VARCHAR(50) NOT NULL DEFAULT 'Inspected' CHECK (cleanliness_status IN ('Clean', 'Dirty', 'Inspected', 'Touch-up Required')),
+    lock_reason TEXT DEFAULT NULL,
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Schema migration columns for existing Supabase installations
+ALTER TABLE public.rooms ADD COLUMN IF NOT EXISTS floor INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE public.rooms ADD COLUMN IF NOT EXISTS max_occupancy INTEGER NOT NULL DEFAULT 2;
+ALTER TABLE public.rooms ADD COLUMN IF NOT EXISTS bed_type VARCHAR(100) NOT NULL DEFAULT '1 King Bed';
+ALTER TABLE public.rooms ADD COLUMN IF NOT EXISTS view_type VARCHAR(100) NOT NULL DEFAULT 'City Skyline';
+ALTER TABLE public.rooms ADD COLUMN IF NOT EXISTS sq_meters INTEGER NOT NULL DEFAULT 35;
+ALTER TABLE public.rooms ADD COLUMN IF NOT EXISTS is_smoking BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE public.rooms ADD COLUMN IF NOT EXISTS cleanliness_status VARCHAR(50) NOT NULL DEFAULT 'Inspected';
+ALTER TABLE public.rooms ADD COLUMN IF NOT EXISTS lock_reason TEXT DEFAULT NULL;
 
 -- ------------------------------------------------------------------------------
 -- 3. Table: amenities (Add-On Guest Services Catalog)

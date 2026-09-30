@@ -80,6 +80,9 @@ from schemas import (
     NightlyRateDetail,
     PriceQuoteRequest,
     PriceQuoteResponse,
+    CleanlinessStatus,
+    RoomHousekeepingUpdate,
+    RoomSpecificationResponse,
     RoomResponse,
     RoomStatus,
     RoomStatusUpdate,
@@ -394,24 +397,52 @@ def get_kpi_analytics(
         )
 
 
+def row_to_room_response(row) -> RoomResponse:
+    """Helper to cleanly serialize database rows into rich RoomResponse models."""
+    keys = row.keys() if hasattr(row, "keys") else []
+    return RoomResponse(
+        id=row["id"],
+        room_number=row["room_number"],
+        room_type=row["room_type"],
+        price_per_night=float(row["price_per_night"]),
+        status=row["status"],
+        floor=int(row["floor"]) if "floor" in keys and row["floor"] is not None else 1,
+        max_occupancy=int(row["max_occupancy"]) if "max_occupancy" in keys and row["max_occupancy"] is not None else 2,
+        bed_type=row["bed_type"] if "bed_type" in keys and row["bed_type"] else "1 King Bed",
+        view_type=row["view_type"] if "view_type" in keys and row["view_type"] else "City Skyline",
+        sq_meters=int(row["sq_meters"]) if "sq_meters" in keys and row["sq_meters"] is not None else 35,
+        is_smoking=bool(row["is_smoking"]) if "is_smoking" in keys and row["is_smoking"] is not None else False,
+        cleanliness_status=CleanlinessStatus(row["cleanliness_status"]) if "cleanliness_status" in keys and row["cleanliness_status"] else CleanlinessStatus.INSPECTED,
+        lock_reason=row["lock_reason"] if "lock_reason" in keys else None,
+        created_at=str(row["created_at"]) if "created_at" in keys and row["created_at"] else None,
+        booked_until=str(row["booked_until"]) if "booked_until" in keys and row["booked_until"] else None,
+    )
+
+
 @app.get(
     "/api/rooms",
     response_model=List[RoomResponse],
-    summary="List available rooms",
+    summary="List available rooms with architectural and housekeeping filters",
     tags=["Rooms"],
 )
 def get_rooms(
     check_in_date: Optional[date] = Query(None, description="Optional target check-in date"),
     check_out_date: Optional[date] = Query(None, description="Optional target check-out date"),
     room_type: Optional[RoomType] = Query(None, description="Filter by room type"),
+    floor: Optional[int] = Query(None, ge=1, le=50, description="Filter by building floor level"),
+    min_occupancy: Optional[int] = Query(None, ge=1, description="Minimum guest capacity required"),
+    cleanliness_status: Optional[CleanlinessStatus] = Query(None, description="Filter by housekeeping inspection state"),
     include_maintenance: bool = Query(False, description="Include rooms marked as Maintenance"),
     conn: sqlite3.Connection = Depends(get_db),
 ):
     """
-    Retrieves rooms from the catalog.
-    If date bounds are provided, filters out conflicting bookings.
-    If date bounds are omitted, returns all rooms with their operational status
-    and active booking checkout date.
+    Retrieves rooms from the catalog with architectural and operational filters:
+    - Date range availability overlap checking (preventing double bookings)
+    - Category (Single, Double, Family Suite)
+    - Floor level (1, 2, 3...)
+    - Minimum guest occupancy capacity
+    - Housekeeping cleanliness state (Clean, Dirty, Inspected)
+    - Maintenance exclusion
     """
     cursor = conn.cursor()
 
@@ -421,6 +452,9 @@ def get_rooms(
             detail="Both 'check_in_date' and 'check_out_date' must be provided together.",
         )
 
+    conditions = []
+    params = []
+
     if check_in_date and check_out_date:
         if check_out_date <= check_in_date:
             raise HTTPException(
@@ -428,7 +462,7 @@ def get_rooms(
                 detail="'check_out_date' must be strictly after 'check_in_date'.",
             )
 
-        conditions = [
+        conditions.append(
             """r.id NOT IN (
                 SELECT b.room_id
                 FROM Bookings b
@@ -436,65 +470,46 @@ def get_rooms(
                   AND b.check_in_date < ?
                   AND b.check_out_date > ?
             )"""
-        ]
-        params = [check_out_date.isoformat(), check_in_date.isoformat()]
-
-        if not include_maintenance:
-            conditions.append("r.status != 'Maintenance'")
-
-        if room_type:
-            conditions.append("r.room_type = ?")
-            params.append(room_type.value)
-
-        where_clause = " WHERE " + " AND ".join(conditions)
-        query = f"""
-        SELECT r.id, r.room_number, r.room_type, r.price_per_night, r.status, r.created_at, NULL as booked_until
-        FROM Rooms r
-        {where_clause}
-        ORDER BY r.room_number ASC;
-        """
-        cursor.execute(query, params)
-    else:
-        conditions = []
-        params = []
-
-        if not include_maintenance:
-            conditions.append("r.status != 'Maintenance'")
-
-        if room_type:
-            conditions.append("r.room_type = ?")
-            params.append(room_type.value)
-
-        where_clause = (" WHERE " + " AND ".join(conditions)) if conditions else ""
-        query = f"""
-        SELECT r.id, r.room_number, r.room_type, r.price_per_night, r.status, r.created_at,
-               (
-                   SELECT b.check_out_date
-                   FROM Bookings b
-                   WHERE b.room_id = r.id
-                     AND b.booking_status != 'Cancelled'
-                   ORDER BY b.check_out_date DESC
-                   LIMIT 1
-               ) as booked_until
-        FROM Rooms r
-        {where_clause}
-        ORDER BY r.room_number ASC;
-        """
-        cursor.execute(query, params)
-
-    rows = cursor.fetchall()
-    return [
-        RoomResponse(
-            id=row["id"],
-            room_number=row["room_number"],
-            room_type=row["room_type"],
-            price_per_night=row["price_per_night"],
-            status=row["status"],
-            created_at=str(row["created_at"]) if row["created_at"] else None,
-            booked_until=str(row["booked_until"]) if row["booked_until"] else None,
         )
-        for row in rows
-    ]
+        params.extend([check_out_date.isoformat(), check_in_date.isoformat()])
+
+    if not include_maintenance:
+        conditions.append("r.status != 'Maintenance'")
+
+    if room_type:
+        conditions.append("r.room_type = ?")
+        params.append(room_type.value)
+
+    if floor:
+        conditions.append("r.floor = ?")
+        params.append(floor)
+
+    if min_occupancy:
+        conditions.append("r.max_occupancy >= ?")
+        params.append(min_occupancy)
+
+    if cleanliness_status:
+        conditions.append("r.cleanliness_status = ?")
+        params.append(cleanliness_status.value)
+
+    where_clause = (" WHERE " + " AND ".join(conditions)) if conditions else ""
+    query = f"""
+    SELECT r.*,
+           (
+               SELECT b.check_out_date
+               FROM Bookings b
+               WHERE b.room_id = r.id
+                 AND b.booking_status != 'Cancelled'
+               ORDER BY b.check_out_date DESC
+               LIMIT 1
+           ) as booked_until
+    FROM Rooms r
+    {where_clause}
+    ORDER BY r.room_number ASC;
+    """
+    cursor.execute(query, params)
+    rows = cursor.fetchall()
+    return [row_to_room_response(row) for row in rows]
 
 
 @app.patch(
@@ -522,10 +537,25 @@ def update_room_status(
         )
     old_status = existing["status"]
 
-    cursor.execute(
-        "UPDATE Rooms SET status = ? WHERE id = ?;",
-        (status_update.status.value, room_id),
-    )
+    lock_val = status_update.lock_reason if status_update.status == RoomStatus.MAINTENANCE else None
+
+    # Check available columns for backward compatibility with isolated test fixtures
+    if not IS_POSTGRES:
+        cursor.execute("PRAGMA table_info(Rooms);")
+        r_cols = {r[1] for r in cursor.fetchall()}
+    else:
+        r_cols = {"lock_reason", "cleanliness_status"}
+
+    if "lock_reason" in r_cols:
+        cursor.execute(
+            "UPDATE Rooms SET status = ?, lock_reason = ? WHERE id = ?;",
+            (status_update.status.value, lock_val, room_id),
+        )
+    else:
+        cursor.execute(
+            "UPDATE Rooms SET status = ? WHERE id = ?;",
+            (status_update.status.value, room_id),
+        )
     record_audit_log(
         conn,
         action="ROOM_STATUS_UPDATED",
@@ -535,6 +565,7 @@ def update_room_status(
             "room_number": existing["room_number"],
             "old_status": old_status,
             "new_status": status_update.status.value,
+            "lock_reason": lock_val,
         },
         actor="Front Desk Agent",
     )
@@ -542,7 +573,7 @@ def update_room_status(
 
     cursor.execute(
         """
-        SELECT r.id, r.room_number, r.room_type, r.price_per_night, r.status, r.created_at,
+        SELECT r.*,
                (
                    SELECT b.check_out_date
                    FROM Bookings b
@@ -557,14 +588,135 @@ def update_room_status(
         (room_id,),
     )
     row = cursor.fetchone()
-    return RoomResponse(
-        id=row["id"],
-        room_number=row["room_number"],
-        room_type=row["room_type"],
-        price_per_night=row["price_per_night"],
-        status=row["status"],
-        created_at=str(row["created_at"]) if row["created_at"] else None,
-        booked_until=str(row["booked_until"]) if row["booked_until"] else None,
+    return row_to_room_response(row)
+
+
+@app.patch(
+    "/api/rooms/{room_id}/housekeeping",
+    response_model=RoomResponse,
+    summary="Update room housekeeping cleanliness and inspection state",
+    tags=["Rooms"],
+)
+def update_room_housekeeping(
+    room_id: int,
+    housekeeping_update: RoomHousekeepingUpdate,
+    conn: sqlite3.Connection = Depends(get_db),
+):
+    """
+    Updates the housekeeping cleanliness state (Clean, Dirty, Inspected, Touch-up Required).
+    - If status is marked 'Inspected' or 'Clean' while room was in 'Cleaning', auto-releases room to 'Available'.
+    - If status is marked 'Dirty' while room was in 'Available', automatically flags operational status as 'Cleaning'.
+    - Records an audit log event for compliance and housekeeping ledger tracking.
+    """
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, room_number, status, cleanliness_status FROM Rooms WHERE id = ?;", (room_id,))
+    existing = cursor.fetchone()
+    if not existing:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Room with ID {room_id} does not exist.",
+        )
+
+    old_clean = existing["cleanliness_status"] if "cleanliness_status" in existing.keys() else "Inspected"
+    new_clean = housekeeping_update.cleanliness_status.value
+    current_status = existing["status"]
+    new_status = current_status
+
+    if new_clean == CleanlinessStatus.DIRTY.value and current_status == "Available":
+        new_status = "Cleaning"
+    elif new_clean in (CleanlinessStatus.INSPECTED.value, CleanlinessStatus.CLEAN.value) and current_status == "Cleaning":
+        new_status = "Available"
+
+    cursor.execute(
+        """
+        UPDATE Rooms
+        SET cleanliness_status = ?, status = ?
+        WHERE id = ?;
+        """,
+        (new_clean, new_status, room_id),
+    )
+
+    record_audit_log(
+        conn,
+        action="HOUSEKEEPING_INSPECTED",
+        entity_type="Room",
+        entity_id=room_id,
+        details={
+            "room_number": existing["room_number"],
+            "old_cleanliness": old_clean,
+            "new_cleanliness": new_clean,
+            "inspected_by": housekeeping_update.inspected_by or "Housekeeping Team",
+            "notes": housekeeping_update.notes or "",
+            "operational_status": new_status,
+        },
+        actor=housekeeping_update.inspected_by or "Housekeeper",
+    )
+    conn.commit()
+
+    cursor.execute(
+        """
+        SELECT r.*, NULL as booked_until
+        FROM Rooms r
+        WHERE r.id = ?;
+        """,
+        (room_id,),
+    )
+    row = cursor.fetchone()
+    return row_to_room_response(row)
+
+
+@app.get(
+    "/api/rooms/{room_id}/specifications",
+    response_model=RoomSpecificationResponse,
+    summary="Get comprehensive architectural room specifications and operational dossier",
+    tags=["Rooms"],
+)
+def get_room_specifications(
+    room_id: int,
+    conn: sqlite3.Connection = Depends(get_db),
+):
+    """
+    Returns complete room dossier including floor, bed type, view, square meters,
+    smoking policy, inspection state, lock reason, and active booking ID if occupied.
+    """
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT r.*,
+               (
+                   SELECT b.id
+                   FROM Bookings b
+                   WHERE b.room_id = r.id
+                     AND b.booking_status IN ('Confirmed', 'Checked-in')
+                     AND b.check_out_date >= CURRENT_DATE
+                   ORDER BY b.check_in_date ASC
+                   LIMIT 1
+               ) as active_booking_id,
+               (
+                   SELECT b.check_out_date
+                   FROM Bookings b
+                   WHERE b.room_id = r.id
+                     AND b.booking_status != 'Cancelled'
+                   ORDER BY b.check_out_date DESC
+                   LIMIT 1
+               ) as booked_until
+        FROM Rooms r
+        WHERE r.id = ?;
+        """,
+        (room_id,),
+    )
+    row = cursor.fetchone()
+    if not row:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Room with ID {room_id} not found.",
+        )
+
+    base_resp = row_to_room_response(row)
+    return RoomSpecificationResponse(
+        **base_resp.model_dump(),
+        active_booking_id=row["active_booking_id"] if "active_booking_id" in row.keys() else None,
+        last_cleaned_at=str(row["created_at"]) if "created_at" in row.keys() else None,
     )
 
 
@@ -1393,7 +1545,18 @@ def check_out_booking(
 
     room_id = booking["room_id"]
     cursor.execute("UPDATE Bookings SET booking_status = 'Checked-out' WHERE id = ?;", (booking_id,))
-    cursor.execute("UPDATE Rooms SET status = 'Cleaning' WHERE id = ?;", (room_id,))
+
+    if not IS_POSTGRES:
+        cursor.execute("PRAGMA table_info(Rooms);")
+        r_cols = {r[1] for r in cursor.fetchall()}
+    else:
+        r_cols = {"cleanliness_status"}
+
+    if "cleanliness_status" in r_cols:
+        cursor.execute("UPDATE Rooms SET status = 'Cleaning', cleanliness_status = 'Dirty' WHERE id = ?;", (room_id,))
+    else:
+        cursor.execute("UPDATE Rooms SET status = 'Cleaning' WHERE id = ?;", (room_id,))
+
     cursor.execute("UPDATE FolioCharges SET status = 'Paid' WHERE booking_id = ? AND status = 'Billed';", (booking_id,))
 
     record_audit_log(

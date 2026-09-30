@@ -32,6 +32,8 @@ const refreshRoomsBtn = document.getElementById("refreshRoomsBtn");
 const filterCheckIn = document.getElementById("filterCheckIn");
 const filterCheckOut = document.getElementById("filterCheckOut");
 const filterType = document.getElementById("filterType");
+const filterFloor = document.getElementById("filterFloor");
+const filterCleanliness = document.getElementById("filterCleanliness");
 const filterMaintenance = document.getElementById("filterMaintenance");
 const applyFilterBtn = document.getElementById("applyFilterBtn");
 const resetFilterBtn = document.getElementById("resetFilterBtn");
@@ -162,10 +164,10 @@ function setupEventListeners() {
     fetchRooms();
   });
 
-  // 1. Instant Reactive Filtering by Category
-  filterType.addEventListener("change", () => {
-    applyCurrentFilters();
-  });
+  // 1. Instant Reactive Filtering by Category, Floor, and Cleanliness
+  filterType.addEventListener("change", applyCurrentFilters);
+  if (filterFloor) filterFloor.addEventListener("change", applyCurrentFilters);
+  if (filterCleanliness) filterCleanliness.addEventListener("change", applyCurrentFilters);
 
   // Maintenance visibility filter
   if (filterMaintenance) {
@@ -191,6 +193,8 @@ function setupEventListeners() {
     filterCheckIn.value = "";
     filterCheckOut.value = "";
     filterType.value = "";
+    if (filterFloor) filterFloor.value = "";
+    if (filterCleanliness) filterCleanliness.value = "";
     if (filterMaintenance) filterMaintenance.checked = false;
     fetchRooms();
   });
@@ -501,14 +505,22 @@ async function fetchRooms(checkIn = null, checkOut = null) {
 }
 
 /**
- * Instantly filters room inventory by selected category dropdown
+ * Instantly filters room inventory by selected category, floor, and cleanliness state
  */
 function applyCurrentFilters() {
-  const selectedCategory = filterType.value.trim();
+  const selectedCategory = filterType ? filterType.value.trim() : "";
+  const selectedFloor = filterFloor ? filterFloor.value.trim() : "";
+  const selectedCleanliness = filterCleanliness ? filterCleanliness.value.trim() : "";
 
   let visibleRooms = allRoomsData;
   if (selectedCategory) {
-    visibleRooms = allRoomsData.filter((r) => r.room_type === selectedCategory);
+    visibleRooms = visibleRooms.filter((r) => r.room_type === selectedCategory);
+  }
+  if (selectedFloor) {
+    visibleRooms = visibleRooms.filter((r) => String(r.floor) === selectedFloor);
+  }
+  if (selectedCleanliness) {
+    visibleRooms = visibleRooms.filter((r) => r.cleanliness_status === selectedCleanliness);
   }
 
   renderRooms(visibleRooms);
@@ -581,44 +593,111 @@ function renderRooms(rooms) {
       `;
     }
 
+    // Cleanliness pill badge
+    let cleanClass = "cleanliness-inspected";
+    let cleanText = "✓ Inspected";
+    const cStatus = room.cleanliness_status || "Inspected";
+    if (cStatus === "Clean") {
+      cleanClass = "cleanliness-clean";
+      cleanText = "Clean";
+    } else if (cStatus === "Dirty") {
+      cleanClass = "cleanliness-dirty";
+      cleanText = "Dirty";
+    } else if (cStatus === "Touch-up Required") {
+      cleanClass = "cleanliness-touchup";
+      cleanText = "Touch-up";
+    }
+
+    // Architectural Specs
+    const floorLabel = room.floor ? `Floor ${room.floor}` : `Floor 1`;
+    const bedLabel = room.bed_type || "1 King Bed";
+    const occLabel = room.max_occupancy ? `👤 Max ${room.max_occupancy}` : "👤 Max 2";
+    const viewLabel = room.view_type || "Courtyard Garden";
+    const sqmLbl = room.sq_meters ? `${room.sq_meters}m²` : "35m²";
+
+    // Maintenance Lock Notice
+    const lockBannerHtml = (isMaintenance && room.lock_reason)
+      ? `<div class="room-lock-banner">🔒 ${escapeHtml(room.lock_reason)}</div>`
+      : "";
+
     card.innerHTML = `
       <div class="card-top">
         <div class="room-badge-group">
           <span class="room-category-pill ${categoryClass}">${room.room_type}</span>
           <span class="room-number">Room ${room.room_number}</span>
         </div>
-        <span class="status-pill ${statusPillClass}">${statusLabel}</span>
+        <div class="room-status-badges">
+          <span class="status-pill ${statusPillClass}">${statusLabel}</span>
+          <span class="cleanliness-pill ${cleanClass}">${cleanText}</span>
+        </div>
       </div>
+
+      <div class="room-spec-tags">
+        <span class="spec-pill spec-pill-floor">${floorLabel}</span>
+        <span class="spec-pill spec-pill-occ">${occLabel}</span>
+        <span class="spec-pill spec-pill-bed">${bedLabel}</span>
+        <span class="spec-pill spec-pill-view">${viewLabel} · ${sqmLbl}</span>
+      </div>
+
+      ${lockBannerHtml}
+
       <div class="card-middle">
         <span class="room-price-val">$${room.price_per_night.toFixed(2)}</span>
         <span class="room-price-period">/ night</span>
       </div>
+
       <div class="card-bottom">
         ${actionBtnHtml}
       </div>
+
       <div class="card-quick-actions" onclick="event.stopPropagation()">
-        <span class="quick-action-label">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 20h9"></path>
-            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
-          </svg>
-          Status
-        </span>
-        <select class="quick-action-select" data-room-id="${room.id}" aria-label="Change Room Status">
-          <option value="Available" ${room.status === "Available" ? "selected" : ""}>Mark Available</option>
-          <option value="Cleaning" ${room.status === "Cleaning" ? "selected" : ""}>Mark Cleaned</option>
-          <option value="Occupied" ${room.status === "Occupied" ? "selected" : ""}>Mark Occupied</option>
-          <option value="Maintenance" ${room.status === "Maintenance" ? "selected" : ""}>Mark Maintenance</option>
-        </select>
+        <div class="card-quick-actions-row">
+          <span class="quick-action-label">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 20h9"></path>
+              <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+            </svg>
+            Status
+          </span>
+          <select class="quick-action-select status-select" data-room-id="${room.id}" aria-label="Change Room Status">
+            <option value="Available" ${room.status === "Available" ? "selected" : ""}>Mark Available</option>
+            <option value="Cleaning" ${room.status === "Cleaning" ? "selected" : ""}>Mark Cleaning</option>
+            <option value="Occupied" ${room.status === "Occupied" ? "selected" : ""}>Mark Occupied</option>
+            <option value="Maintenance" ${room.status === "Maintenance" ? "selected" : ""}>Mark Maintenance</option>
+          </select>
+        </div>
+        <div class="card-quick-actions-row" style="margin-top: 6px;">
+          <span class="quick-action-label">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+            Clean
+          </span>
+          <select class="quick-action-select cleanliness-select" data-room-id="${room.id}" aria-label="Housekeeping Cleanliness State">
+            <option value="Inspected" ${cStatus === "Inspected" ? "selected" : ""}>Inspected</option>
+            <option value="Clean" ${cStatus === "Clean" ? "selected" : ""}>Clean</option>
+            <option value="Dirty" ${cStatus === "Dirty" ? "selected" : ""}>Dirty</option>
+            <option value="Touch-up Required" ${cStatus === "Touch-up Required" ? "selected" : ""}>Touch-up</option>
+          </select>
+        </div>
       </div>
     `;
 
-    // Bind Quick Action mutation
-    const statusSelect = card.querySelector(".quick-action-select");
+    // Bind Quick Action status mutation
+    const statusSelect = card.querySelector(".status-select");
     if (statusSelect) {
       statusSelect.addEventListener("change", (e) => {
         e.stopPropagation();
         updateRoomStatus(room.id, e.target.value);
+      });
+    }
+
+    // Bind Housekeeping inspection mutation
+    const cleanlinessSelect = card.querySelector(".cleanliness-select");
+    if (cleanlinessSelect) {
+      cleanlinessSelect.addEventListener("change", (e) => {
+        e.stopPropagation();
+        updateRoomHousekeeping(room.id, e.target.value);
       });
     }
 
@@ -632,13 +711,50 @@ function renderRooms(rooms) {
         } else if (isCleaning) {
           showToast(`Room ${room.room_number} is currently being sanitized.`, "info");
         } else if (isMaintenance) {
-          showToast(`Room ${room.room_number} is out of service for maintenance.`, "error");
+          showToast(`Room ${room.room_number} is out of service: ${room.lock_reason || "Maintenance"}.`, "error");
         }
       });
     }
 
     roomsGrid.appendChild(card);
   });
+}
+
+/**
+ * Updates room housekeeping cleanliness status via PATCH /api/rooms/{roomId}/housekeeping
+ */
+async function updateRoomHousekeeping(roomId, newCleanliness) {
+  try {
+    const response = await fetch(`/api/rooms/${roomId}/housekeeping`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        cleanliness_status: newCleanliness,
+        inspected_by: "Housekeeping Supervisor",
+        notes: `Turnover inspection recorded as ${newCleanliness} from Front Desk dashboard.`
+      }),
+    });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.detail || `Server returned HTTP ${response.status}`);
+    }
+
+    const updatedRoom = await response.json();
+
+    // Update in-memory state
+    const idx = allRoomsData.findIndex((r) => r.id === roomId);
+    if (idx !== -1) {
+      allRoomsData[idx] = updatedRoom;
+    }
+
+    showToast(`Room ${updatedRoom.room_number} housekeeping marked as ${updatedRoom.cleanliness_status}.`, "success");
+    applyCurrentFilters();
+    fetchAuditLogs();
+    fetchKPIs();
+  } catch (error) {
+    showToast(`Failed to update housekeeping state: ${error.message}`, "error");
+  }
 }
 
 /**

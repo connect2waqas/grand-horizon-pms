@@ -14,8 +14,12 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any, List, Optional, Tuple
 
-import psycopg2
-import psycopg2.extras
+try:
+    import psycopg2
+    import psycopg2.extras
+except ImportError:
+    psycopg2 = None
+
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.pool import StaticPool
@@ -257,9 +261,38 @@ def init_db() -> None:
         room_type TEXT NOT NULL CHECK(room_type IN ('Single', 'Double', 'Family Suite')),
         price_per_night REAL NOT NULL CHECK(price_per_night > 0),
         status TEXT NOT NULL DEFAULT 'Available' CHECK(status IN ('Available', 'Occupied', 'Maintenance', 'Cleaning')),
+        floor INTEGER NOT NULL DEFAULT 1,
+        max_occupancy INTEGER NOT NULL DEFAULT 2,
+        bed_type TEXT NOT NULL DEFAULT '1 King Bed',
+        view_type TEXT NOT NULL DEFAULT 'City Skyline',
+        sq_meters INTEGER NOT NULL DEFAULT 35,
+        is_smoking INTEGER NOT NULL DEFAULT 0,
+        cleanliness_status TEXT NOT NULL DEFAULT 'Inspected',
+        lock_reason TEXT DEFAULT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
     """)
+
+    # Schema migration: Ensure realistic room specifications exist for previously created databases
+    if not IS_POSTGRES:
+        cursor.execute("PRAGMA table_info(Rooms);")
+        existing_room_cols = {row[1] for row in cursor.fetchall()}
+        if "floor" not in existing_room_cols:
+            cursor.execute("ALTER TABLE Rooms ADD COLUMN floor INTEGER NOT NULL DEFAULT 1;")
+        if "max_occupancy" not in existing_room_cols:
+            cursor.execute("ALTER TABLE Rooms ADD COLUMN max_occupancy INTEGER NOT NULL DEFAULT 2;")
+        if "bed_type" not in existing_room_cols:
+            cursor.execute("ALTER TABLE Rooms ADD COLUMN bed_type TEXT NOT NULL DEFAULT '1 King Bed';")
+        if "view_type" not in existing_room_cols:
+            cursor.execute("ALTER TABLE Rooms ADD COLUMN view_type TEXT NOT NULL DEFAULT 'City Skyline';")
+        if "sq_meters" not in existing_room_cols:
+            cursor.execute("ALTER TABLE Rooms ADD COLUMN sq_meters INTEGER NOT NULL DEFAULT 35;")
+        if "is_smoking" not in existing_room_cols:
+            cursor.execute("ALTER TABLE Rooms ADD COLUMN is_smoking INTEGER NOT NULL DEFAULT 0;")
+        if "cleanliness_status" not in existing_room_cols:
+            cursor.execute("ALTER TABLE Rooms ADD COLUMN cleanliness_status TEXT NOT NULL DEFAULT 'Inspected';")
+        if "lock_reason" not in existing_room_cols:
+            cursor.execute("ALTER TABLE Rooms ADD COLUMN lock_reason TEXT DEFAULT NULL;")
 
     # Table 3: Bookings (Foreign Keys with referential integrity; checkout after checkin constraint)
     cursor.execute("""
@@ -468,39 +501,42 @@ def seed_amenities() -> None:
 def seed_rooms() -> None:
     """
     Seeds the database with initial rooms across all categories and realistic operational states.
-    Uses INSERT OR IGNORE based on unique room_number to guarantee idempotency.
+    Populates floor hierarchy, bed arrangement, max occupancy, and housekeeping cleanliness state.
+    Uses INSERT OR IGNORE and updates existing records to ensure complete data consistency.
     """
     if IS_POSTGRES:
         return
-    sample_rooms: List[Tuple[str, str, float, str]] = [
-        ("101", "Single", 79.99, "Available"),
-        ("102", "Single", 84.99, "Cleaning"),
-        ("201", "Double", 129.99, "Available"),
-        ("202", "Double", 139.99, "Occupied"),
-        ("301", "Family Suite", 219.99, "Available"),
-        ("302", "Family Suite", 249.99, "Available"),
+    sample_rooms = [
+        ("101", "Single", 79.99, "Available", 1, 2, "1 Queen Bed", "Courtyard Garden", 32, 0, "Inspected"),
+        ("102", "Single", 84.99, "Cleaning", 1, 2, "1 Queen Bed", "Courtyard Garden", 32, 0, "Dirty"),
+        ("201", "Double", 129.99, "Available", 2, 3, "1 King Bed", "City Skyline", 48, 0, "Inspected"),
+        ("202", "Double", 139.99, "Occupied", 2, 4, "2 Queen Beds", "Ocean Horizon", 52, 0, "Clean"),
+        ("301", "Family Suite", 219.99, "Available", 3, 5, "1 King + 2 Twin Beds", "Panoramic Ocean", 88, 0, "Inspected"),
+        ("302", "Family Suite", 249.99, "Available", 3, 6, "2 King Beds", "Penthouse Terrace", 115, 0, "Inspected"),
     ]
 
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    cursor.executemany(
-        """
-        INSERT OR IGNORE INTO Rooms (room_number, room_type, price_per_night, status)
-        VALUES (?, ?, ?, ?);
-        """,
-        sample_rooms,
-    )
+    for r in sample_rooms:
+        cursor.execute(
+            """
+            INSERT OR IGNORE INTO Rooms (room_number, room_type, price_per_night, status, floor, max_occupancy, bed_type, view_type, sq_meters, is_smoking, cleanliness_status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+            """,
+            r,
+        )
+        cursor.execute(
+            """
+            UPDATE Rooms
+            SET floor = ?, max_occupancy = ?, bed_type = ?, view_type = ?, sq_meters = ?, is_smoking = ?, cleanliness_status = ?
+            WHERE room_number = ?;
+            """,
+            (r[4], r[5], r[6], r[7], r[8], r[9], r[10], r[0]),
+        )
 
     conn.commit()
-
-    cursor.execute("SELECT id, room_number, room_type, price_per_night, status FROM Rooms;")
-    rooms = cursor.fetchall()
     conn.close()
-
-    print(f"Sample rooms seeded. Total rooms in database: {len(rooms)}")
-    for room in rooms:
-        print(f" - Room {room['room_number']} ({room['room_type']}): ${room['price_per_night']}/night [{room['status']}]")
 
 
 def seed_coupons() -> None:

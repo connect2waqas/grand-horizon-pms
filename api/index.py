@@ -42,6 +42,7 @@ from database import (
     seed_audit_logs,
     seed_maintenance_tickets,
     seed_folio_charges,
+    seed_housekeeping_tasks,
     IS_POSTGRES,
 )
 from schemas import (
@@ -78,6 +79,14 @@ from schemas import (
     GuestDetailResponse,
     GuestResponse,
     GuestUpdate,
+    HousekeepingPriority,
+    HousekeepingSummaryResponse,
+    HousekeepingTaskBase,
+    HousekeepingTaskCreate,
+    HousekeepingTaskResponse,
+    HousekeepingTaskStatus,
+    HousekeepingTaskType,
+    HousekeepingTaskUpdate,
     InvoiceItem,
     KPIAnalyticsResponse,
     MaintenanceCategory,
@@ -137,7 +146,9 @@ async def lifespan(app: FastAPI):
             seed_audit_logs()
             seed_maintenance_tickets()
             seed_folio_charges()
+            seed_housekeeping_tasks()
         seed_rate_plans()
+        seed_housekeeping_tasks()
     except Exception as e:
         print(f"Lifespan initialization note: {e}")
     yield
@@ -424,6 +435,11 @@ def row_to_room_response(row) -> RoomResponse:
         sq_meters=int(row["sq_meters"]) if "sq_meters" in keys and row["sq_meters"] is not None else 35,
         is_smoking=bool(row["is_smoking"]) if "is_smoking" in keys and row["is_smoking"] is not None else False,
         cleanliness_status=CleanlinessStatus(row["cleanliness_status"]) if "cleanliness_status" in keys and row["cleanliness_status"] else CleanlinessStatus.INSPECTED,
+        assigned_housekeeper=row["assigned_housekeeper"] if "assigned_housekeeper" in keys else None,
+        cleaning_priority=row["cleaning_priority"] if "cleaning_priority" in keys and row["cleaning_priority"] else "Normal",
+        dnd_status=bool(row["dnd_status"]) if "dnd_status" in keys and row["dnd_status"] is not None else False,
+        last_cleaned_at=str(row["last_cleaned_at"]) if "last_cleaned_at" in keys and row["last_cleaned_at"] else None,
+        last_inspected_at=str(row["last_inspected_at"]) if "last_inspected_at" in keys and row["last_inspected_at"] else None,
         lock_reason=row["lock_reason"] if "lock_reason" in keys else None,
         created_at=str(row["created_at"]) if "created_at" in keys and row["created_at"] else None,
         booked_until=str(row["booked_until"]) if "booked_until" in keys and row["booked_until"] else None,
@@ -638,14 +654,40 @@ def update_room_housekeeping(
     elif new_clean in (CleanlinessStatus.INSPECTED.value, CleanlinessStatus.CLEAN.value) and current_status == "Cleaning":
         new_status = "Available"
 
-    cursor.execute(
-        """
-        UPDATE Rooms
-        SET cleanliness_status = ?, status = ?
-        WHERE id = ?;
-        """,
-        (new_clean, new_status, room_id),
-    )
+    # Dynamic column inspection for safe updates across schema versions
+    if not IS_POSTGRES:
+        cursor.execute("PRAGMA table_info(Rooms);")
+        r_cols = {r[1] for r in cursor.fetchall()}
+    else:
+        r_cols = {"cleanliness_status", "assigned_housekeeper", "cleaning_priority", "dnd_status", "last_cleaned_at", "last_inspected_at"}
+
+    updates = ["cleanliness_status = ?", "status = ?"]
+    params = [new_clean, new_status]
+
+    if "assigned_housekeeper" in r_cols and housekeeping_update.assigned_housekeeper is not None:
+        updates.append("assigned_housekeeper = ?")
+        params.append(housekeeping_update.assigned_housekeeper)
+
+    if "cleaning_priority" in r_cols and housekeeping_update.cleaning_priority is not None:
+        updates.append("cleaning_priority = ?")
+        params.append(housekeeping_update.cleaning_priority)
+
+    if "dnd_status" in r_cols and housekeeping_update.dnd_status is not None:
+        updates.append("dnd_status = ?")
+        params.append(1 if housekeeping_update.dnd_status else 0)
+
+    now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    if new_clean in (CleanlinessStatus.CLEAN.value, CleanlinessStatus.INSPECTED.value) and "last_cleaned_at" in r_cols:
+        updates.append("last_cleaned_at = ?")
+        params.append(now_iso)
+
+    if new_clean == CleanlinessStatus.INSPECTED.value and "last_inspected_at" in r_cols:
+        updates.append("last_inspected_at = ?")
+        params.append(now_iso)
+
+    params.append(room_id)
+    update_sql = f"UPDATE Rooms SET {', '.join(updates)} WHERE id = ?;"
+    cursor.execute(update_sql, params)
 
     record_audit_log(
         conn,
@@ -656,6 +698,9 @@ def update_room_housekeeping(
             "room_number": existing["room_number"],
             "old_cleanliness": old_clean,
             "new_cleanliness": new_clean,
+            "assigned_housekeeper": housekeeping_update.assigned_housekeeper,
+            "cleaning_priority": housekeeping_update.cleaning_priority,
+            "dnd_status": housekeeping_update.dnd_status,
             "inspected_by": housekeeping_update.inspected_by or "Housekeeping Team",
             "notes": housekeeping_update.notes or "",
             "operational_status": new_status,
@@ -724,11 +769,11 @@ def get_room_specifications(
         )
 
     base_resp = row_to_room_response(row)
-    return RoomSpecificationResponse(
-        **base_resp.model_dump(),
-        active_booking_id=row["active_booking_id"] if "active_booking_id" in row.keys() else None,
-        last_cleaned_at=str(row["created_at"]) if "created_at" in row.keys() else None,
-    )
+    spec_data = base_resp.model_dump()
+    spec_data["active_booking_id"] = row["active_booking_id"] if "active_booking_id" in row.keys() else None
+    if not spec_data.get("last_cleaned_at") and "created_at" in row.keys():
+        spec_data["last_cleaned_at"] = str(row["created_at"]) if row["created_at"] else None
+    return RoomSpecificationResponse(**spec_data)
 
 
 @app.get(
@@ -2030,9 +2075,22 @@ def check_out_booking(
         r_cols = {"cleanliness_status"}
 
     if "cleanliness_status" in r_cols:
-        cursor.execute("UPDATE Rooms SET status = 'Cleaning', cleanliness_status = 'Dirty' WHERE id = ?;", (room_id,))
+        cursor.execute("UPDATE Rooms SET status = 'Cleaning', cleanliness_status = 'Dirty', cleaning_priority = 'Rush Checkout Turnover' WHERE id = ?;", (room_id,))
     else:
         cursor.execute("UPDATE Rooms SET status = 'Cleaning' WHERE id = ?;", (room_id,))
+
+    # Auto-dispatch Module 4 housekeeping turnover work order for departed room
+    try:
+        ensure_housekeeping_tasks_table(conn)
+        cursor.execute(
+            """
+            INSERT INTO HousekeepingTasks (room_id, task_type, priority, status, assigned_housekeeper, notes)
+            VALUES (?, 'Checkout Turnover', 'Rush Checkout Turnover', 'Pending', 'Maria Santos', ?);
+            """,
+            (room_id, f"Auto-dispatched turnover on checkout for Booking #{booking_id} (Room {booking['room_number']})"),
+        )
+    except Exception as e:
+        print(f"Housekeeping turnover dispatch note: {e}")
 
     cursor.execute("UPDATE FolioCharges SET status = 'Paid' WHERE booking_id = ? AND status = 'Billed';", (booking_id,))
 
@@ -3788,6 +3846,459 @@ def void_folio_charge(
         void_reason=row["void_reason"],
         created_at=str(row["created_at"]) if row["created_at"] else None,
     )
+
+
+# ==========================================
+# Module 4: Housekeeping & Room Status Management
+# ==========================================
+
+def ensure_housekeeping_tasks_table(conn: sqlite3.Connection):
+    """Ensures HousekeepingTasks table exists across both SQLite and PostgreSQL connections."""
+    cursor = conn.cursor()
+    if not IS_POSTGRES:
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS HousekeepingTasks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            room_id INTEGER NOT NULL,
+            task_type TEXT NOT NULL DEFAULT 'Checkout Turnover',
+            priority TEXT NOT NULL DEFAULT 'Normal',
+            status TEXT NOT NULL DEFAULT 'Pending',
+            assigned_housekeeper TEXT DEFAULT 'Maria Santos',
+            linen_changed INTEGER NOT NULL DEFAULT 0,
+            amenities_restocked INTEGER NOT NULL DEFAULT 0,
+            bathroom_sanitized INTEGER NOT NULL DEFAULT 0,
+            notes TEXT DEFAULT '',
+            inspected_by TEXT DEFAULT NULL,
+            inspector_notes TEXT DEFAULT '',
+            started_at TIMESTAMP DEFAULT NULL,
+            completed_at TIMESTAMP DEFAULT NULL,
+            inspected_at TIMESTAMP DEFAULT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (room_id) REFERENCES Rooms(id) ON DELETE CASCADE
+        );
+        """)
+        cursor.execute("PRAGMA table_info(Rooms);")
+        r_cols = {r[1] for r in cursor.fetchall()}
+        if "assigned_housekeeper" not in r_cols:
+            cursor.execute("ALTER TABLE Rooms ADD COLUMN assigned_housekeeper TEXT DEFAULT NULL;")
+        if "cleaning_priority" not in r_cols:
+            cursor.execute("ALTER TABLE Rooms ADD COLUMN cleaning_priority TEXT NOT NULL DEFAULT 'Normal';")
+        if "dnd_status" not in r_cols:
+            cursor.execute("ALTER TABLE Rooms ADD COLUMN dnd_status INTEGER NOT NULL DEFAULT 0;")
+        if "last_cleaned_at" not in r_cols:
+            cursor.execute("ALTER TABLE Rooms ADD COLUMN last_cleaned_at TIMESTAMP DEFAULT NULL;")
+        if "last_inspected_at" not in r_cols:
+            cursor.execute("ALTER TABLE Rooms ADD COLUMN last_inspected_at TIMESTAMP DEFAULT NULL;")
+        conn.commit()
+    else:
+        try:
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS HousekeepingTasks (
+                id SERIAL PRIMARY KEY,
+                room_id INTEGER NOT NULL REFERENCES Rooms(id) ON DELETE CASCADE,
+                task_type VARCHAR(50) NOT NULL DEFAULT 'Checkout Turnover',
+                priority VARCHAR(50) NOT NULL DEFAULT 'Normal',
+                status VARCHAR(50) NOT NULL DEFAULT 'Pending',
+                assigned_housekeeper VARCHAR(100) DEFAULT 'Maria Santos',
+                linen_changed INTEGER NOT NULL DEFAULT 0,
+                amenities_restocked INTEGER NOT NULL DEFAULT 0,
+                bathroom_sanitized INTEGER NOT NULL DEFAULT 0,
+                notes TEXT DEFAULT '',
+                inspected_by VARCHAR(100) DEFAULT NULL,
+                inspector_notes TEXT DEFAULT '',
+                started_at TIMESTAMPTZ DEFAULT NULL,
+                completed_at TIMESTAMPTZ DEFAULT NULL,
+                inspected_at TIMESTAMPTZ DEFAULT NULL,
+                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            );
+            """)
+            conn.commit()
+        except Exception:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+
+
+def row_to_housekeeping_task_response(r) -> HousekeepingTaskResponse:
+    keys = r.keys() if hasattr(r, "keys") else []
+    return HousekeepingTaskResponse(
+        id=r["id"],
+        room_id=r["room_id"],
+        room_number=r["room_number"] if "room_number" in keys else None,
+        room_type=r["room_type"] if "room_type" in keys else None,
+        floor=int(r["floor"]) if "floor" in keys and r["floor"] is not None else 1,
+        task_type=HousekeepingTaskType(r["task_type"]) if "task_type" in keys and r["task_type"] else HousekeepingTaskType.CHECKOUT_TURNOVER,
+        priority=HousekeepingPriority(r["priority"]) if "priority" in keys and r["priority"] else HousekeepingPriority.NORMAL,
+        status=HousekeepingTaskStatus(r["status"]) if "status" in keys and r["status"] else HousekeepingTaskStatus.PENDING,
+        assigned_housekeeper=r["assigned_housekeeper"] if "assigned_housekeeper" in keys else None,
+        linen_changed=bool(r["linen_changed"]) if "linen_changed" in keys and r["linen_changed"] is not None else False,
+        amenities_restocked=bool(r["amenities_restocked"]) if "amenities_restocked" in keys and r["amenities_restocked"] is not None else False,
+        bathroom_sanitized=bool(r["bathroom_sanitized"]) if "bathroom_sanitized" in keys and r["bathroom_sanitized"] is not None else False,
+        notes=r["notes"] if "notes" in keys and r["notes"] else "",
+        inspected_by=r["inspected_by"] if "inspected_by" in keys else None,
+        inspector_notes=r["inspector_notes"] if "inspector_notes" in keys and r["inspector_notes"] else "",
+        started_at=str(r["started_at"]) if "started_at" in keys and r["started_at"] else None,
+        completed_at=str(r["completed_at"]) if "completed_at" in keys and r["completed_at"] else None,
+        inspected_at=str(r["inspected_at"]) if "inspected_at" in keys and r["inspected_at"] else None,
+        created_at=str(r["created_at"]) if "created_at" in keys and r["created_at"] else None,
+    )
+
+
+@app.get(
+    "/api/housekeeping/dashboard",
+    response_model=HousekeepingSummaryResponse,
+    summary="Get executive housekeeping operational KPI dashboard summary",
+    tags=["Housekeeping & Room Status"],
+)
+@app.get(
+    "/api/housekeeping/summary",
+    response_model=HousekeepingSummaryResponse,
+    include_in_schema=False,
+)
+def get_housekeeping_dashboard(conn: sqlite3.Connection = Depends(get_db)):
+    """
+    Returns real-time aggregated operational metrics for housekeeping:
+    - Inspected Ready vs Clean (Pending Inspection) vs Dirty (Needs Turnover)
+    - Cleaning In Progress vs Touch-up Required
+    - Active Do Not Disturb (DND) count
+    - Urgent and rush turnover task counts
+    - Active housekeeping attendants
+    """
+    ensure_housekeeping_tasks_table(conn)
+    cursor = conn.cursor()
+
+    # Room states
+    cursor.execute("SELECT cleanliness_status, status, dnd_status FROM Rooms;")
+    rooms = cursor.fetchall()
+    total_rooms = len(rooms)
+    inspected_ready = sum(1 for r in rooms if r["cleanliness_status"] == "Inspected")
+    clean_pending_inspection = sum(1 for r in rooms if r["cleanliness_status"] == "Clean")
+    dirty_needs_turnover = sum(1 for r in rooms if r["cleanliness_status"] == "Dirty")
+    cleaning_in_progress = sum(1 for r in rooms if r["status"] == "Cleaning")
+    touch_up_required = sum(1 for r in rooms if r["cleanliness_status"] == "Touch-up Required")
+    dnd_active = sum(1 for r in rooms if "dnd_status" in (r.keys() if hasattr(r, "keys") else []) and bool(r["dnd_status"]))
+
+    # Task states
+    cursor.execute(
+        """
+        SELECT COUNT(*) as cnt
+        FROM HousekeepingTasks
+        WHERE priority IN ('Urgent VIP Arrival', 'Rush Checkout Turnover')
+          AND status != 'Inspected';
+        """
+    )
+    urg_row = cursor.fetchone()
+    urgent_priority_count = urg_row["cnt"] if urg_row else 0
+
+    cursor.execute(
+        """
+        SELECT COUNT(*) as cnt
+        FROM HousekeepingTasks
+        WHERE status IN ('Pending', 'In Progress');
+        """
+    )
+    pend_row = cursor.fetchone()
+    pending_tasks_count = pend_row["cnt"] if pend_row else 0
+
+    cursor.execute(
+        """
+        SELECT DISTINCT assigned_housekeeper
+        FROM HousekeepingTasks
+        WHERE assigned_housekeeper IS NOT NULL AND TRIM(assigned_housekeeper) != '';
+        """
+    )
+    hk_rows = cursor.fetchall()
+    housekeepers = [h["assigned_housekeeper"] for h in hk_rows if h["assigned_housekeeper"]]
+    if not housekeepers:
+        housekeepers = ["Maria Santos", "David Kim", "Elena Rostova"]
+
+    return HousekeepingSummaryResponse(
+        total_rooms=total_rooms,
+        inspected_ready=inspected_ready,
+        clean_pending_inspection=clean_pending_inspection,
+        dirty_needs_turnover=dirty_needs_turnover,
+        cleaning_in_progress=cleaning_in_progress,
+        touch_up_required=touch_up_required,
+        dnd_active=dnd_active,
+        urgent_priority_count=urgent_priority_count,
+        pending_tasks_count=pending_tasks_count,
+        active_housekeepers=housekeepers,
+    )
+
+
+@app.get(
+    "/api/housekeeping/tasks",
+    response_model=List[HousekeepingTaskResponse],
+    summary="List housekeeping turnover tasks with filtering",
+    tags=["Housekeeping & Room Status"],
+)
+def get_housekeeping_tasks(
+    status: Optional[HousekeepingTaskStatus] = Query(None, description="Filter by task status"),
+    priority: Optional[HousekeepingPriority] = Query(None, description="Filter by urgency priority"),
+    room_id: Optional[int] = Query(None, description="Filter by room ID"),
+    assigned_housekeeper: Optional[str] = Query(None, description="Filter by assigned staff"),
+    conn: sqlite3.Connection = Depends(get_db),
+):
+    """Retrieves all housekeeping turnover work orders joined with room numbers and floors."""
+    ensure_housekeeping_tasks_table(conn)
+    cursor = conn.cursor()
+
+    conditions = []
+    params = []
+
+    if status:
+        conditions.append("t.status = ?")
+        params.append(status.value)
+    if priority:
+        conditions.append("t.priority = ?")
+        params.append(priority.value)
+    if room_id:
+        conditions.append("t.room_id = ?")
+        params.append(room_id)
+    if assigned_housekeeper:
+        conditions.append("t.assigned_housekeeper = ?")
+        params.append(assigned_housekeeper)
+
+    where_clause = (" WHERE " + " AND ".join(conditions)) if conditions else ""
+    query = f"""
+    SELECT t.*, r.room_number, r.room_type, r.floor
+    FROM HousekeepingTasks t
+    JOIN Rooms r ON t.room_id = r.id
+    {where_clause}
+    ORDER BY
+        CASE t.priority
+            WHEN 'Urgent VIP Arrival' THEN 1
+            WHEN 'Rush Checkout Turnover' THEN 2
+            WHEN 'High' THEN 3
+            WHEN 'Normal' THEN 4
+            ELSE 5
+        END,
+        t.id DESC;
+    """
+    cursor.execute(query, params)
+    rows = cursor.fetchall()
+    return [row_to_housekeeping_task_response(r) for r in rows]
+
+
+@app.post(
+    "/api/housekeeping/tasks",
+    response_model=HousekeepingTaskResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Dispatch a new housekeeping turnover or cleaning task",
+    tags=["Housekeeping & Room Status"],
+)
+def create_housekeeping_task(
+    payload: HousekeepingTaskCreate,
+    conn: sqlite3.Connection = Depends(get_db),
+):
+    """Dispatches a new housekeeping turnover work order and aligns room cleaning status."""
+    ensure_housekeeping_tasks_table(conn)
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT id, room_number, status, cleanliness_status FROM Rooms WHERE id = ?;", (payload.room_id,))
+    room = cursor.fetchone()
+    if not room:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Room with ID {payload.room_id} does not exist.",
+        )
+
+    assigned = payload.assigned_housekeeper.strip() if payload.assigned_housekeeper else "Maria Santos"
+    cursor.execute(
+        """
+        INSERT INTO HousekeepingTasks (room_id, task_type, priority, status, assigned_housekeeper, notes)
+        VALUES (?, ?, ?, 'Pending', ?, ?);
+        """,
+        (
+            payload.room_id,
+            payload.task_type.value,
+            payload.priority.value,
+            assigned,
+            payload.notes.strip() if payload.notes else "",
+        ),
+    )
+    new_task_id = cursor.lastrowid
+
+    # Sync room cleaning priority and attendant
+    cursor.execute(
+        """
+        UPDATE Rooms
+        SET assigned_housekeeper = ?, cleaning_priority = ?
+        WHERE id = ?;
+        """,
+        (assigned, payload.priority.value, payload.room_id),
+    )
+
+    record_audit_log(
+        conn,
+        action="HOUSEKEEPING_TASK_CREATED",
+        entity_type="Room",
+        entity_id=payload.room_id,
+        details={
+            "task_id": new_task_id,
+            "room_number": room["room_number"],
+            "task_type": payload.task_type.value,
+            "priority": payload.priority.value,
+            "assigned_housekeeper": assigned,
+        },
+        actor="Executive Housekeeper",
+    )
+    conn.commit()
+
+    cursor.execute(
+        """
+        SELECT t.*, r.room_number, r.room_type, r.floor
+        FROM HousekeepingTasks t
+        JOIN Rooms r ON t.room_id = r.id
+        WHERE t.id = ?;
+        """,
+        (new_task_id,),
+    )
+    row = cursor.fetchone()
+    return row_to_housekeeping_task_response(row)
+
+
+@app.patch(
+    "/api/housekeeping/tasks/{task_id}",
+    response_model=HousekeepingTaskResponse,
+    summary="Update housekeeping task lifecycle, checklist, and quality audit",
+    tags=["Housekeeping & Room Status"],
+)
+def update_housekeeping_task(
+    task_id: int,
+    payload: HousekeepingTaskUpdate,
+    conn: sqlite3.Connection = Depends(get_db),
+):
+    """
+    Updates the lifecycle status and quality checklist of a housekeeping task:
+    - Status transitions: Pending -> In Progress (marks room Cleaning) -> Cleaned (marks room Clean) -> Inspected (auto-releases room to Available!)
+    - Checklist updates: linen_changed, amenities_restocked, bathroom_sanitized
+    - Inspector notes and sign-off
+    """
+    ensure_housekeeping_tasks_table(conn)
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        SELECT t.*, r.room_number, r.status as room_status, r.cleanliness_status as room_cleanliness
+        FROM HousekeepingTasks t
+        JOIN Rooms r ON t.room_id = r.id
+        WHERE t.id = ?;
+        """,
+        (task_id,),
+    )
+    task = cursor.fetchone()
+    if not task:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Housekeeping task #{task_id} not found.",
+        )
+
+    room_id = task["room_id"]
+    current_task_status = task["status"]
+    now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+
+    updates = []
+    params = []
+
+    if payload.status is not None:
+        updates.append("status = ?")
+        params.append(payload.status.value)
+        if payload.status == HousekeepingTaskStatus.IN_PROGRESS and not task["started_at"]:
+            updates.append("started_at = ?")
+            params.append(now_iso)
+            # Update room to Cleaning if Available
+            if task["room_status"] == "Available":
+                cursor.execute("UPDATE Rooms SET status = 'Cleaning' WHERE id = ?;", (room_id,))
+        elif payload.status == HousekeepingTaskStatus.CLEANED:
+            updates.append("completed_at = ?")
+            params.append(now_iso)
+            cursor.execute("UPDATE Rooms SET cleanliness_status = 'Clean', last_cleaned_at = ? WHERE id = ?;", (now_iso, room_id))
+        elif payload.status == HousekeepingTaskStatus.INSPECTED:
+            updates.append("inspected_at = ?")
+            params.append(now_iso)
+            inspector = payload.inspected_by or "Executive Housekeeper"
+            updates.append("inspected_by = ?")
+            params.append(inspector)
+            # Release room to Available if currently Cleaning
+            cursor.execute(
+                """
+                UPDATE Rooms
+                SET cleanliness_status = 'Inspected',
+                    last_inspected_at = ?,
+                    status = CASE WHEN status = 'Cleaning' THEN 'Available' ELSE status END
+                WHERE id = ?;
+                """,
+                (now_iso, room_id),
+            )
+
+    if payload.assigned_housekeeper is not None:
+        updates.append("assigned_housekeeper = ?")
+        params.append(payload.assigned_housekeeper.strip())
+        cursor.execute("UPDATE Rooms SET assigned_housekeeper = ? WHERE id = ?;", (payload.assigned_housekeeper.strip(), room_id))
+
+    if payload.priority is not None:
+        updates.append("priority = ?")
+        params.append(payload.priority.value)
+        cursor.execute("UPDATE Rooms SET cleaning_priority = ? WHERE id = ?;", (payload.priority.value, room_id))
+
+    if payload.linen_changed is not None:
+        updates.append("linen_changed = ?")
+        params.append(1 if payload.linen_changed else 0)
+
+    if payload.amenities_restocked is not None:
+        updates.append("amenities_restocked = ?")
+        params.append(1 if payload.amenities_restocked else 0)
+
+    if payload.bathroom_sanitized is not None:
+        updates.append("bathroom_sanitized = ?")
+        params.append(1 if payload.bathroom_sanitized else 0)
+
+    if payload.notes is not None:
+        updates.append("notes = ?")
+        params.append(payload.notes.strip())
+
+    if payload.inspected_by is not None and "inspected_by" not in [u.split()[0] for u in updates]:
+        updates.append("inspected_by = ?")
+        params.append(payload.inspected_by.strip())
+
+    if payload.inspector_notes is not None:
+        updates.append("inspector_notes = ?")
+        params.append(payload.inspector_notes.strip())
+
+    if updates:
+        params.append(task_id)
+        update_sql = f"UPDATE HousekeepingTasks SET {', '.join(updates)} WHERE id = ?;"
+        cursor.execute(update_sql, params)
+
+    record_audit_log(
+        conn,
+        action="HOUSEKEEPING_TASK_UPDATED",
+        entity_type="Room",
+        entity_id=room_id,
+        details={
+            "task_id": task_id,
+            "room_number": task["room_number"],
+            "old_status": current_task_status,
+            "new_status": payload.status.value if payload.status else current_task_status,
+            "inspected_by": payload.inspected_by,
+        },
+        actor=payload.inspected_by or "Housekeeping Attendant",
+    )
+    conn.commit()
+
+    cursor.execute(
+        """
+        SELECT t.*, r.room_number, r.room_type, r.floor
+        FROM HousekeepingTasks t
+        JOIN Rooms r ON t.room_id = r.id
+        WHERE t.id = ?;
+        """,
+        (task_id,),
+    )
+    row = cursor.fetchone()
+    return row_to_housekeeping_task_response(row)
 
 
 # Mount static files if directory exists (local development fallback)

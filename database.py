@@ -268,6 +268,11 @@ def init_db() -> None:
         sq_meters INTEGER NOT NULL DEFAULT 35,
         is_smoking INTEGER NOT NULL DEFAULT 0,
         cleanliness_status TEXT NOT NULL DEFAULT 'Inspected',
+        assigned_housekeeper TEXT DEFAULT NULL,
+        cleaning_priority TEXT NOT NULL DEFAULT 'Normal',
+        dnd_status INTEGER NOT NULL DEFAULT 0,
+        last_cleaned_at TIMESTAMP DEFAULT NULL,
+        last_inspected_at TIMESTAMP DEFAULT NULL,
         lock_reason TEXT DEFAULT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
@@ -291,6 +296,16 @@ def init_db() -> None:
             cursor.execute("ALTER TABLE Rooms ADD COLUMN is_smoking INTEGER NOT NULL DEFAULT 0;")
         if "cleanliness_status" not in existing_room_cols:
             cursor.execute("ALTER TABLE Rooms ADD COLUMN cleanliness_status TEXT NOT NULL DEFAULT 'Inspected';")
+        if "assigned_housekeeper" not in existing_room_cols:
+            cursor.execute("ALTER TABLE Rooms ADD COLUMN assigned_housekeeper TEXT DEFAULT NULL;")
+        if "cleaning_priority" not in existing_room_cols:
+            cursor.execute("ALTER TABLE Rooms ADD COLUMN cleaning_priority TEXT NOT NULL DEFAULT 'Normal';")
+        if "dnd_status" not in existing_room_cols:
+            cursor.execute("ALTER TABLE Rooms ADD COLUMN dnd_status INTEGER NOT NULL DEFAULT 0;")
+        if "last_cleaned_at" not in existing_room_cols:
+            cursor.execute("ALTER TABLE Rooms ADD COLUMN last_cleaned_at TIMESTAMP DEFAULT NULL;")
+        if "last_inspected_at" not in existing_room_cols:
+            cursor.execute("ALTER TABLE Rooms ADD COLUMN last_inspected_at TIMESTAMP DEFAULT NULL;")
         if "lock_reason" not in existing_room_cols:
             cursor.execute("ALTER TABLE Rooms ADD COLUMN lock_reason TEXT DEFAULT NULL;")
     else:
@@ -301,6 +316,11 @@ def init_db() -> None:
         cursor.execute("ALTER TABLE Rooms ADD COLUMN IF NOT EXISTS sq_meters INTEGER NOT NULL DEFAULT 35;")
         cursor.execute("ALTER TABLE Rooms ADD COLUMN IF NOT EXISTS is_smoking INTEGER NOT NULL DEFAULT 0;")
         cursor.execute("ALTER TABLE Rooms ADD COLUMN IF NOT EXISTS cleanliness_status TEXT NOT NULL DEFAULT 'Inspected';")
+        cursor.execute("ALTER TABLE Rooms ADD COLUMN IF NOT EXISTS assigned_housekeeper TEXT DEFAULT NULL;")
+        cursor.execute("ALTER TABLE Rooms ADD COLUMN IF NOT EXISTS cleaning_priority TEXT NOT NULL DEFAULT 'Normal';")
+        cursor.execute("ALTER TABLE Rooms ADD COLUMN IF NOT EXISTS dnd_status INTEGER NOT NULL DEFAULT 0;")
+        cursor.execute("ALTER TABLE Rooms ADD COLUMN IF NOT EXISTS last_cleaned_at TIMESTAMPTZ DEFAULT NULL;")
+        cursor.execute("ALTER TABLE Rooms ADD COLUMN IF NOT EXISTS last_inspected_at TIMESTAMPTZ DEFAULT NULL;")
         cursor.execute("ALTER TABLE Rooms ADD COLUMN IF NOT EXISTS lock_reason TEXT DEFAULT NULL;")
 
     # Table 3: Bookings (Foreign Keys with referential integrity; checkout after checkin constraint)
@@ -481,6 +501,29 @@ def init_db() -> None:
         void_reason TEXT DEFAULT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (booking_id) REFERENCES Bookings(id) ON DELETE CASCADE
+    );
+    """)
+
+    # Table 10: HousekeepingTasks (Module 4: Turnover, Work Orders & Quality Audits)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS HousekeepingTasks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        room_id INTEGER NOT NULL,
+        task_type TEXT NOT NULL DEFAULT 'Checkout Turnover',
+        priority TEXT NOT NULL DEFAULT 'Normal',
+        status TEXT NOT NULL DEFAULT 'Pending',
+        assigned_housekeeper TEXT DEFAULT 'Maria Santos',
+        linen_changed INTEGER NOT NULL DEFAULT 0,
+        amenities_restocked INTEGER NOT NULL DEFAULT 0,
+        bathroom_sanitized INTEGER NOT NULL DEFAULT 0,
+        notes TEXT DEFAULT '',
+        inspected_by TEXT DEFAULT NULL,
+        inspector_notes TEXT DEFAULT '',
+        started_at TIMESTAMP DEFAULT NULL,
+        completed_at TIMESTAMP DEFAULT NULL,
+        inspected_at TIMESTAMP DEFAULT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (room_id) REFERENCES Rooms(id) ON DELETE CASCADE
     );
     """)
 
@@ -790,6 +833,97 @@ def seed_rate_plans() -> None:
     conn.close()
 
 
+def seed_housekeeping_tasks() -> None:
+    """
+    Seeds initial housekeeping turnover, cleaning, and inspection tasks.
+    Idempotent across both SQLite and PostgreSQL.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    sample_tasks = [
+        (3, "Checkout Turnover", "Rush Checkout Turnover", "Pending", "Maria Santos", 0, 0, 0, "Previous guest departed at 11 AM. New check-in expected at 3 PM."),
+        (4, "Stayover Clean", "Normal", "In Progress", "David Kim", 1, 0, 0, "Replace extra towels and restock espresso pods."),
+        (1, "Inspection Audit", "Normal", "Inspected", "Elena Rostova", 1, 1, 1, "Passed 5-star quality sanitation audit."),
+    ]
+    if not IS_POSTGRES:
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS HousekeepingTasks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            room_id INTEGER NOT NULL,
+            task_type TEXT NOT NULL DEFAULT 'Checkout Turnover',
+            priority TEXT NOT NULL DEFAULT 'Normal',
+            status TEXT NOT NULL DEFAULT 'Pending',
+            assigned_housekeeper TEXT DEFAULT 'Maria Santos',
+            linen_changed INTEGER NOT NULL DEFAULT 0,
+            amenities_restocked INTEGER NOT NULL DEFAULT 0,
+            bathroom_sanitized INTEGER NOT NULL DEFAULT 0,
+            notes TEXT DEFAULT '',
+            inspected_by TEXT DEFAULT NULL,
+            inspector_notes TEXT DEFAULT '',
+            started_at TIMESTAMP DEFAULT NULL,
+            completed_at TIMESTAMP DEFAULT NULL,
+            inspected_at TIMESTAMP DEFAULT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (room_id) REFERENCES Rooms(id) ON DELETE CASCADE
+        );
+        """)
+        cursor.execute("SELECT COUNT(*) as cnt FROM HousekeepingTasks;")
+        if cursor.fetchone()["cnt"] == 0:
+            cursor.executemany(
+                """
+                INSERT INTO HousekeepingTasks (room_id, task_type, priority, status, assigned_housekeeper, linen_changed, amenities_restocked, bathroom_sanitized, notes)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+                """,
+                sample_tasks,
+            )
+            conn.commit()
+            print("Housekeeping tasks seeded.")
+    else:
+        try:
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS HousekeepingTasks (
+                id SERIAL PRIMARY KEY,
+                room_id INTEGER NOT NULL REFERENCES Rooms(id) ON DELETE CASCADE,
+                task_type VARCHAR(50) NOT NULL DEFAULT 'Checkout Turnover',
+                priority VARCHAR(50) NOT NULL DEFAULT 'Normal',
+                status VARCHAR(50) NOT NULL DEFAULT 'Pending',
+                assigned_housekeeper VARCHAR(100) DEFAULT 'Maria Santos',
+                linen_changed INTEGER NOT NULL DEFAULT 0,
+                amenities_restocked INTEGER NOT NULL DEFAULT 0,
+                bathroom_sanitized INTEGER NOT NULL DEFAULT 0,
+                notes TEXT DEFAULT '',
+                inspected_by VARCHAR(100) DEFAULT NULL,
+                inspector_notes TEXT DEFAULT '',
+                started_at TIMESTAMPTZ DEFAULT NULL,
+                completed_at TIMESTAMPTZ DEFAULT NULL,
+                inspected_at TIMESTAMPTZ DEFAULT NULL,
+                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            );
+            """)
+            conn.commit()
+            cursor.execute("SELECT COUNT(*) as cnt FROM HousekeepingTasks;")
+            row = cursor.fetchone()
+            cnt = row["cnt"] if row and "cnt" in row.keys() else 0
+            if cnt == 0:
+                for t in sample_tasks:
+                    cursor.execute(
+                        """
+                        INSERT INTO HousekeepingTasks (room_id, task_type, priority, status, assigned_housekeeper, linen_changed, amenities_restocked, bathroom_sanitized, notes)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+                        """,
+                        t,
+                    )
+                conn.commit()
+                print("Housekeeping tasks seeded (PostgreSQL).")
+        except Exception as e:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            print(f"PostgreSQL HousekeepingTasks seed note: {e}")
+    conn.close()
+
+
 if __name__ == "__main__":
     print(f"Target SQLite Database: {DATABASE_PATH}")
     init_db()
@@ -800,6 +934,7 @@ if __name__ == "__main__":
     seed_audit_logs()
     seed_maintenance_tickets()
     seed_folio_charges()
+    seed_housekeeping_tasks()
 
 
 

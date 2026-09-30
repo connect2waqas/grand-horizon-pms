@@ -152,6 +152,8 @@ document.addEventListener("DOMContentLoaded", () => {
   fetchAuditLogs();
   fetchMaintenanceTickets();
   fetchMaintenanceSummary();
+  fetchHousekeepingDashboard();
+  fetchHousekeepingTasks();
   setupEventListeners();
 });
 
@@ -456,6 +458,37 @@ function setupEventListeners() {
   }
   if (resolveTicketForm) {
     resolveTicketForm.addEventListener("submit", handleSubmitResolveTicket);
+  }
+
+  // Module 4: Housekeeping Status Tabs
+  const hkTabs = document.querySelectorAll("#housekeepingStatusTabs .tab-btn");
+  hkTabs.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      hkTabs.forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      const status = btn.getAttribute("data-status");
+      fetchHousekeepingTasks(status);
+    });
+  });
+
+  // Module 4: Housekeeping Modal triggers
+  const btnOpenHkModal = document.getElementById("btnOpenNewHkTaskModal");
+  if (btnOpenHkModal) {
+    btnOpenHkModal.addEventListener("click", openDispatchHkTaskModal);
+  }
+  const btnCancelHkModal = document.getElementById("btnCancelHkTaskModal");
+  if (btnCancelHkModal) {
+    btnCancelHkModal.addEventListener("click", closeDispatchHkTaskModal);
+  }
+  const dispatchHkModal = document.getElementById("dispatchHkTaskModal");
+  if (dispatchHkModal) {
+    dispatchHkModal.addEventListener("click", (e) => {
+      if (e.target === dispatchHkModal) closeDispatchHkTaskModal();
+    });
+  }
+  const dispatchHkForm = document.getElementById("dispatchHkTaskForm");
+  if (dispatchHkForm) {
+    dispatchHkForm.addEventListener("submit", handleDispatchHkTaskSubmit);
   }
 }
 
@@ -1580,6 +1613,8 @@ async function handleCheckIn(bookingId) {
     fetchRooms();
     fetchKPIs();
     fetchAuditLogs();
+    fetchHousekeepingDashboard();
+    fetchHousekeepingTasks(currentHkFilter);
   } catch (err) {
     showToast(`Check-in failed: ${err.message}`, "error");
   }
@@ -1601,6 +1636,8 @@ async function handleCheckOut(bookingId) {
     fetchRooms();
     fetchKPIs();
     fetchAuditLogs();
+    fetchHousekeepingDashboard();
+    fetchHousekeepingTasks(currentHkFilter);
   } catch (err) {
     showToast(`Check-out failed: ${err.message}`, "error");
   }
@@ -2487,6 +2524,309 @@ async function promptVoidCharge(chargeId, desc, amount) {
     fetchBookings();
   } catch (err) {
     showToast(`Failed to void charge: ${err.message}`, "error");
+  }
+}
+
+// ==========================================
+// Module 4: Housekeeping & Room Status Controller
+// ==========================================
+
+let currentHkFilter = "";
+
+/**
+ * Fetches executive housekeeping dashboard summary KPIs
+ */
+async function fetchHousekeepingDashboard() {
+  try {
+    const res = await fetch("/api/housekeeping/dashboard");
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    const elInspected = document.getElementById("hkKpiInspected");
+    const elClean = document.getElementById("hkKpiClean");
+    const elDirty = document.getElementById("hkKpiDirty");
+    const elCleaning = document.getElementById("hkKpiCleaning");
+    const elUrgent = document.getElementById("hkKpiUrgent");
+    const elDnd = document.getElementById("hkKpiDnd");
+
+    if (elInspected) elInspected.textContent = data.inspected_ready;
+    if (elClean) elClean.textContent = data.clean_pending_inspection;
+    if (elDirty) elDirty.textContent = data.dirty_needs_turnover;
+    if (elCleaning) elCleaning.textContent = data.cleaning_in_progress;
+    if (elUrgent) elUrgent.textContent = data.urgent_priority_count;
+    if (elDnd) elDnd.textContent = data.dnd_active;
+  } catch (err) {
+    console.error("fetchHousekeepingDashboard error:", err);
+  }
+}
+
+/**
+ * Fetches housekeeping tasks catalog with optional status filter
+ */
+async function fetchHousekeepingTasks(statusFilter = "") {
+  try {
+    currentHkFilter = statusFilter;
+    const url = statusFilter ? `/api/housekeeping/tasks?status=${encodeURIComponent(statusFilter)}` : "/api/housekeeping/tasks";
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const tasks = await res.json();
+    renderHousekeepingTable(tasks);
+  } catch (err) {
+    console.error("fetchHousekeepingTasks error:", err);
+  }
+}
+
+/**
+ * Renders housekeeping tasks in the dashboard table
+ */
+function renderHousekeepingTable(tasks) {
+  const tbody = document.getElementById("housekeepingTableBody");
+  const emptyPlaceholder = document.getElementById("housekeepingEmpty");
+  if (!tbody) return;
+
+  tbody.innerHTML = "";
+  if (!tasks || tasks.length === 0) {
+    if (emptyPlaceholder) emptyPlaceholder.classList.remove("hidden");
+    return;
+  }
+  if (emptyPlaceholder) emptyPlaceholder.classList.add("hidden");
+
+  tasks.forEach((t) => {
+    const tr = document.createElement("tr");
+
+    let priorityClass = "normal";
+    if (t.priority === "High") priorityClass = "high";
+    else if (t.priority === "Urgent VIP Arrival") priorityClass = "urgent";
+    else if (t.priority === "Rush Checkout Turnover") priorityClass = "rush";
+
+    const statusKey = (t.status || "").toLowerCase().replace(/[^a-z]/g, "");
+
+    const linenHtml = `<span class="hk-checklist-item ${t.linen_changed ? 'checked' : ''}">${t.linen_changed ? '✓' : '○'} Linens</span>`;
+    const amenHtml = `<span class="hk-checklist-item ${t.amenities_restocked ? 'checked' : ''}">${t.amenities_restocked ? '✓' : '○'} Amenities</span>`;
+    const bathHtml = `<span class="hk-checklist-item ${t.bathroom_sanitized ? 'checked' : ''}">${t.bathroom_sanitized ? '✓' : '○'} Sanitized</span>`;
+
+    let notesText = t.notes || "Standard turnover";
+    if (t.inspected_by) {
+      notesText += ` • <span style="color: #34d399; font-weight: 500;">Audited by ${t.inspected_by}</span>`;
+    }
+
+    let actionButtons = `<div class="hk-actions-group">`;
+    if (t.status === "Pending") {
+      actionButtons += `<button class="btn-hk-action btn-hk-start" onclick="handleStartCleaningTask(${t.id})">Start Clean</button>`;
+    } else if (t.status === "In Progress") {
+      actionButtons += `<button class="btn-hk-action btn-hk-clean" onclick="handleMarkTaskCleaned(${t.id})">Mark Cleaned</button>`;
+    } else if (t.status === "Cleaned") {
+      actionButtons += `<button class="btn-hk-action btn-hk-inspect" onclick="handlePassTaskInspection(${t.id})">Pass Inspection</button>`;
+    } else if (t.status === "Inspected") {
+      actionButtons += `<span style="font-size: 11px; color: #34d399; font-weight: 600;">✓ Ready for Guest</span>`;
+    }
+
+    actionButtons += `
+        <button class="btn-hk-action btn-hk-dnd" title="Toggle Do Not Disturb flag for Room ${t.room_number || t.room_id}" onclick="handleToggleRoomDND(${t.room_id})">DND</button>
+      </div>
+    `;
+
+    tr.innerHTML = `
+      <td><span style="font-family: monospace; font-size: 11px; color: var(--text-muted);">#${t.id}</span></td>
+      <td>
+        <strong style="color: var(--text-high-contrast);">Room ${t.room_number || t.room_id}</strong>
+        <span style="font-size: 11px; color: var(--text-muted); display: block;">Fl. ${t.floor || 1} • ${t.room_type || 'Deluxe'}</span>
+      </td>
+      <td><span style="font-size: 12px; font-weight: 500;">${t.task_type}</span></td>
+      <td><span class="hk-priority-badge hk-priority-${priorityClass}">${t.priority}</span></td>
+      <td>
+        <span style="font-size: 12px; font-weight: 600; color: var(--text-high-contrast);">${t.assigned_housekeeper || 'Maria Santos'}</span>
+      </td>
+      <td>
+        <div class="hk-checklist-pills">
+          ${linenHtml} ${amenHtml} ${bathHtml}
+        </div>
+      </td>
+      <td>
+        <div style="font-size: 11.5px; color: var(--text-muted); line-height: 1.3;">${notesText}</div>
+      </td>
+      <td>
+        <span class="hk-status-pill hk-status-${statusKey}">${t.status}</span>
+      </td>
+      <td>${actionButtons}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+/**
+ * Starts cleaning task -> transitions status to 'In Progress'
+ */
+async function handleStartCleaningTask(taskId) {
+  try {
+    const res = await fetch(`/api/housekeeping/tasks/${taskId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "In Progress" }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    showToast(`Task #${taskId} is now In Progress. Room updated to Cleaning.`, "info");
+    fetchHousekeepingDashboard();
+    fetchHousekeepingTasks(currentHkFilter);
+    fetchRooms();
+    fetchKPIs();
+  } catch (err) {
+    showToast(`Failed to update task: ${err.message}`, "error");
+  }
+}
+
+/**
+ * Marks cleaning task complete with checklist -> transitions to 'Cleaned'
+ */
+async function handleMarkTaskCleaned(taskId) {
+  try {
+    const res = await fetch(`/api/housekeeping/tasks/${taskId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        status: "Cleaned",
+        linen_changed: true,
+        amenities_restocked: true,
+        bathroom_sanitized: true,
+        notes: "Full turnover completed. Linens fresh, bathroom sanitized.",
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    showToast(`Task #${taskId} marked Cleaned (Pending Quality Inspection).`, "success");
+    fetchHousekeepingDashboard();
+    fetchHousekeepingTasks(currentHkFilter);
+    fetchRooms();
+    fetchKPIs();
+  } catch (err) {
+    showToast(`Failed to mark cleaned: ${err.message}`, "error");
+  }
+}
+
+/**
+ * Passes executive inspection -> transitions to 'Inspected' & releases room to Available
+ */
+async function handlePassTaskInspection(taskId) {
+  try {
+    const res = await fetch(`/api/housekeeping/tasks/${taskId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        status: "Inspected",
+        inspected_by: "Head Housekeeper Sarah Vance",
+        inspector_notes: "Approved 5-star quality sanitation inspection.",
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    showToast(`Task #${taskId} passed inspection! Room released to Available inventory.`, "success");
+    fetchHousekeepingDashboard();
+    fetchHousekeepingTasks(currentHkFilter);
+    fetchRooms();
+    fetchKPIs();
+  } catch (err) {
+    showToast(`Inspection failed: ${err.message}`, "error");
+  }
+}
+
+/**
+ * Toggles Do Not Disturb (DND) state for a room
+ */
+async function handleToggleRoomDND(roomId) {
+  try {
+    const room = allRoomsData.find((r) => r.id === roomId);
+    const newDnd = room ? !room.dnd_status : true;
+
+    const res = await fetch(`/api/rooms/${roomId}/housekeeping`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        cleanliness_status: room ? room.cleanliness_status : "Clean",
+        dnd_status: newDnd,
+        notes: newDnd ? "Guest toggled DND active." : "DND flag cleared.",
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    showToast(`Room ${room ? room.room_number : roomId} DND is now ${newDnd ? 'ACTIVE (Do Not Disturb)' : 'OFF'}.`, "info");
+    fetchHousekeepingDashboard();
+    fetchRooms();
+  } catch (err) {
+    showToast(`Failed to toggle DND: ${err.message}`, "error");
+  }
+}
+
+/**
+ * Opens dispatch housekeeping task modal and populates rooms
+ */
+function openDispatchHkTaskModal() {
+  const modal = document.getElementById("dispatchHkTaskModal");
+  const roomSelect = document.getElementById("hkModalRoomSelect");
+  if (!modal || !roomSelect) return;
+
+  roomSelect.innerHTML = '<option value="">Select Room...</option>';
+  allRoomsData.forEach((r) => {
+    const opt = document.createElement("option");
+    opt.value = r.id;
+    opt.textContent = `Room ${r.room_number} - ${r.room_type} (${r.status}, ${r.cleanliness_status})`;
+    roomSelect.appendChild(opt);
+  });
+
+  modal.classList.remove("hidden");
+}
+
+function closeDispatchHkTaskModal() {
+  const modal = document.getElementById("dispatchHkTaskModal");
+  if (modal) modal.classList.add("hidden");
+}
+
+async function handleDispatchHkTaskSubmit(e) {
+  e.preventDefault();
+  const roomId = parseInt(document.getElementById("hkModalRoomSelect").value, 10);
+  const taskType = document.getElementById("hkModalTaskType").value;
+  const priority = document.getElementById("hkModalPriority").value;
+  const attendant = document.getElementById("hkModalAttendant").value;
+  const notes = document.getElementById("hkModalNotes").value.trim();
+
+  if (!roomId) {
+    showToast("Please select a target room.", "error");
+    return;
+  }
+
+  try {
+    const res = await fetch("/api/housekeeping/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        room_id: roomId,
+        task_type: taskType,
+        priority: priority,
+        assigned_housekeeper: attendant,
+        notes: notes,
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+
+    showToast(`Housekeeping task dispatched for Room! Assigned to ${attendant}.`, "success");
+    closeDispatchHkTaskModal();
+    fetchHousekeepingDashboard();
+    fetchHousekeepingTasks(currentHkFilter);
+    fetchRooms();
+  } catch (err) {
+    showToast(`Dispatch failed: ${err.message}`, "error");
   }
 }
 

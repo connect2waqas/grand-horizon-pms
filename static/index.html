@@ -659,6 +659,60 @@
       </div>
     </section>
 
+    <!-- Module 4: Housekeeping & Room Status Management -->
+    <section class="housekeeping-section" id="housekeepingSection" aria-label="Housekeeping Turnover & Quality Audits">
+      <div class="reservations-header">
+        <div>
+          <h2 class="panel-title">Housekeeping & Room Turnover Operations</h2>
+          <p class="panel-subtitle">Room turnover states, attendant dispatch, inspection audits, checklist tracking, and DND controls.</p>
+        </div>
+        <div class="crm-controls-group">
+          <!-- Housekeeping Summary KPI Chips -->
+          <div class="maintenance-kpis-wrapper">
+            <span class="m-kpi-chip hk-chip-inspected"><strong id="hkKpiInspected">0</strong> Inspected Ready</span>
+            <span class="m-kpi-chip hk-chip-clean"><strong id="hkKpiClean">0</strong> Clean (Pending Audit)</span>
+            <span class="m-kpi-chip hk-chip-dirty"><strong id="hkKpiDirty">0</strong> Dirty</span>
+            <span class="m-kpi-chip hk-chip-cleaning"><strong id="hkKpiCleaning">0</strong> Cleaning</span>
+            <span class="m-kpi-chip hk-chip-urgent"><strong id="hkKpiUrgent">0</strong> Rush / VIP</span>
+            <span class="m-kpi-chip hk-chip-dnd"><strong id="hkKpiDnd">0</strong> DND Active</span>
+          </div>
+
+          <div class="reservations-filter-tabs" id="housekeepingStatusTabs">
+            <button class="tab-btn active" data-status="">All Tasks</button>
+            <button class="tab-btn" data-status="Pending">Pending</button>
+            <button class="tab-btn" data-status="In Progress">In Progress</button>
+            <button class="tab-btn" data-status="Cleaned">Cleaned</button>
+            <button class="tab-btn" data-status="Inspected">Inspected</button>
+          </div>
+          <button id="btnOpenNewHkTaskModal" class="btn btn-primary" style="font-size: 12px; padding: 7px 14px;">+ Dispatch Cleaning Task</button>
+        </div>
+      </div>
+
+      <div class="reservations-table-wrapper">
+        <table class="reservations-table" id="housekeepingTable">
+          <thead>
+            <tr>
+              <th style="width: 75px;">Task #</th>
+              <th style="width: 110px;">Room</th>
+              <th style="width: 145px;">Task Type</th>
+              <th style="width: 120px;">Priority</th>
+              <th style="width: 130px;">Attendant</th>
+              <th style="width: 180px;">Quality Checklist</th>
+              <th>Turnover Notes / Inspector</th>
+              <th style="width: 110px;">Status</th>
+              <th style="width: 200px;">Operational Actions</th>
+            </tr>
+          </thead>
+          <tbody id="housekeepingTableBody">
+            <!-- Dynamically populated by app.js -->
+          </tbody>
+        </table>
+        <div id="housekeepingEmpty" class="state-placeholder hidden">
+          <p>No housekeeping turnover tasks matching the filter criteria.</p>
+        </div>
+      </div>
+    </section>
+
   </main>
 
   <!-- Reservation Receipt Modal -->
@@ -1033,6 +1087,76 @@
       <div class="modal-footer" style="padding: 14px 24px; border-top: 1px solid var(--border-subtle); display: flex; justify-content: flex-end;">
         <button type="button" id="btnCloseFolioModal" class="btn btn-secondary">Close Folio</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Dispatch Housekeeping Task Modal (Module 4) -->
+  <div id="dispatchHkTaskModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-icon-badge icon-indigo">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+            <polyline points="9 22 9 12 15 12 15 22"></polyline>
+          </svg>
+        </div>
+        <h3 class="modal-title">Dispatch Housekeeping Assignment</h3>
+        <p class="modal-subtitle">Assign room attendant and turnover workflow standards</p>
+      </div>
+
+      <form id="dispatchHkTaskForm">
+        <div class="modal-body">
+          <div class="form-control">
+            <label for="hkModalRoomSelect">Target Room</label>
+            <select id="hkModalRoomSelect" required>
+              <option value="">Select Room...</option>
+            </select>
+          </div>
+
+          <div class="form-grid-2">
+            <div class="form-control">
+              <label for="hkModalTaskType">Task Type</label>
+              <select id="hkModalTaskType" required>
+                <option value="Checkout Turnover">Checkout Turnover</option>
+                <option value="Stayover Clean">Stayover Clean</option>
+                <option value="Deep Clean">Deep Clean</option>
+                <option value="Touch-up">Touch-up</option>
+                <option value="Inspection Audit">Inspection Audit</option>
+              </select>
+            </div>
+            <div class="form-control">
+              <label for="hkModalPriority">Urgency Priority</label>
+              <select id="hkModalPriority" required>
+                <option value="Normal">Normal</option>
+                <option value="High">High</option>
+                <option value="Urgent VIP Arrival">Urgent VIP Arrival</option>
+                <option value="Rush Checkout Turnover">Rush Checkout Turnover</option>
+                <option value="Low">Low</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-control">
+            <label for="hkModalAttendant">Assigned Room Attendant</label>
+            <select id="hkModalAttendant">
+              <option value="Maria Santos">Maria Santos (Lead Attendant)</option>
+              <option value="David Kim">David Kim (Floor Supervisor)</option>
+              <option value="Elena Rostova">Elena Rostova (VIP Suites Specialist)</option>
+              <option value="Carlos Gomez">Carlos Gomez (Evening Turnover)</option>
+            </select>
+          </div>
+
+          <div class="form-control">
+            <label for="hkModalNotes">Turnover Instructions & Preferences</label>
+            <textarea id="hkModalNotes" rows="2" placeholder="E.g. Extra hypoallergenic pillows, restock Nespresso pods, fresh orchids..."></textarea>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" id="btnCancelHkTaskModal" class="btn btn-secondary">Cancel</button>
+          <button type="submit" id="btnSubmitHkTask" class="btn btn-primary">Dispatch Task</button>
+        </div>
+      </form>
     </div>
   </div>
 

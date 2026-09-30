@@ -2486,6 +2486,190 @@ input::-webkit-calendar-picker-indicator {
   font-weight: 500;
 }
 
+/* ==========================================
+   Module 4: Housekeeping & Room Status Styles
+   ========================================== */
+
+.housekeeping-section {
+  margin-top: 40px;
+  background: var(--surface-bg);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  box-shadow: var(--shadow-card);
+}
+
+.hk-chip-inspected {
+  border-color: rgba(16, 185, 129, 0.4);
+  color: #34d399;
+  background: rgba(16, 185, 129, 0.08);
+}
+
+.hk-chip-clean {
+  border-color: rgba(59, 130, 246, 0.4);
+  color: #60a5fa;
+  background: rgba(59, 130, 246, 0.08);
+}
+
+.hk-chip-dirty {
+  border-color: rgba(245, 158, 11, 0.4);
+  color: #fbbf24;
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.hk-chip-cleaning {
+  border-color: rgba(168, 85, 247, 0.4);
+  color: #c084fc;
+  background: rgba(168, 85, 247, 0.08);
+}
+
+.hk-chip-urgent {
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #f87171;
+  background: rgba(239, 68, 68, 0.1);
+  animation: pulse-border 2s infinite ease-in-out;
+}
+
+.hk-chip-dnd {
+  border-color: rgba(236, 72, 153, 0.4);
+  color: #f472b6;
+  background: rgba(236, 72, 153, 0.08);
+}
+
+.hk-priority-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.hk-priority-normal {
+  background: rgba(148, 163, 184, 0.15);
+  color: #cbd5e1;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+.hk-priority-high {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+.hk-priority-urgent {
+  background: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  font-weight: 700;
+}
+
+.hk-priority-rush {
+  background: rgba(236, 72, 153, 0.2);
+  color: #f472b6;
+  border: 1px solid rgba(236, 72, 153, 0.5);
+  font-weight: 700;
+}
+
+.hk-checklist-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.hk-checklist-item {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-muted);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.hk-checklist-item.checked {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border-color: rgba(16, 185, 129, 0.35);
+  font-weight: 600;
+}
+
+.hk-status-pill {
+  padding: 3px 8px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+}
+
+.hk-status-pending {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+}
+
+.hk-status-inprogress {
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+}
+
+.hk-status-cleaned {
+  background: rgba(168, 85, 247, 0.15);
+  color: #c084fc;
+}
+
+.hk-status-inspected {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+}
+
+.hk-actions-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.btn-hk-action {
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  border: 1px solid var(--border-subtle);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-high-contrast);
+  transition: all 0.15s ease;
+}
+
+.btn-hk-action:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--border-medium);
+}
+
+.btn-hk-start {
+  color: #60a5fa;
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+.btn-hk-clean {
+  color: #c084fc;
+  border-color: rgba(168, 85, 247, 0.3);
+}
+
+.btn-hk-inspect {
+  color: #34d399;
+  border-color: rgba(16, 185, 129, 0.3);
+  font-weight: 600;
+}
+
+.btn-hk-dnd {
+  color: #f472b6;
+  border-color: rgba(236, 72, 153, 0.3);
+}
+
 
 
 

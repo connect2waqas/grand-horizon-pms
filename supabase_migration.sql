@@ -247,3 +247,44 @@ INSERT INTO public.rateplans (code, name, description, rate_multiplier, cancella
 ('BB_PACKAGE', 'Bed & Breakfast Package', 'Includes gourmet daily continental breakfast buffet for all guests.', 1.15, 'Flexible (24h free cancellation)', 'Continental Breakfast Included', 1, TRUE),
 ('CORP_EXTENDED', 'Extended Stay & Corporate', 'Long-stay executive preferred partner pricing with 20% discount. Minimum 3 nights required.', 0.80, 'Moderate (48h cancellation)', 'Room Only', 3, TRUE)
 ON CONFLICT (code) DO NOTHING;
+
+-- ==============================================================================
+-- Module 4: Housekeeping & Room Status Management
+-- ==============================================================================
+
+-- Alter Rooms table for Housekeeping Deepening
+ALTER TABLE public.rooms ADD COLUMN IF NOT EXISTS assigned_housekeeper VARCHAR(100) DEFAULT NULL;
+ALTER TABLE public.rooms ADD COLUMN IF NOT EXISTS cleaning_priority VARCHAR(50) NOT NULL DEFAULT 'Normal';
+ALTER TABLE public.rooms ADD COLUMN IF NOT EXISTS dnd_status INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE public.rooms ADD COLUMN IF NOT EXISTS last_cleaned_at TIMESTAMPTZ DEFAULT NULL;
+ALTER TABLE public.rooms ADD COLUMN IF NOT EXISTS last_inspected_at TIMESTAMPTZ DEFAULT NULL;
+
+-- Table 10: HousekeepingTasks (Turnover, Cleaning, and Quality Inspections)
+CREATE TABLE IF NOT EXISTS public.housekeepingtasks (
+    id SERIAL PRIMARY KEY,
+    room_id INTEGER NOT NULL REFERENCES public.rooms(id) ON DELETE CASCADE,
+    task_type VARCHAR(50) NOT NULL DEFAULT 'Checkout Turnover',
+    priority VARCHAR(50) NOT NULL DEFAULT 'Normal',
+    status VARCHAR(50) NOT NULL DEFAULT 'Pending',
+    assigned_housekeeper VARCHAR(100) DEFAULT 'Maria Santos',
+    linen_changed INTEGER NOT NULL DEFAULT 0,
+    amenities_restocked INTEGER NOT NULL DEFAULT 0,
+    bathroom_sanitized INTEGER NOT NULL DEFAULT 0,
+    notes TEXT DEFAULT '',
+    inspected_by VARCHAR(100) DEFAULT NULL,
+    inspector_notes TEXT DEFAULT '',
+    started_at TIMESTAMPTZ DEFAULT NULL,
+    completed_at TIMESTAMPTZ DEFAULT NULL,
+    inspected_at TIMESTAMPTZ DEFAULT NULL,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_housekeeping_room_status ON public.housekeepingtasks (room_id, status);
+CREATE INDEX IF NOT EXISTS idx_housekeeping_housekeeper ON public.housekeepingtasks (assigned_housekeeper);
+
+-- 6. Initial Housekeeping Tasks Seed Data
+INSERT INTO public.housekeepingtasks (room_id, task_type, priority, status, assigned_housekeeper, linen_changed, amenities_restocked, bathroom_sanitized, notes) VALUES
+(3, 'Checkout Turnover', 'Rush Checkout Turnover', 'Pending', 'Maria Santos', 0, 0, 0, 'Previous guest departed at 11 AM. New check-in expected at 3 PM.'),
+(4, 'Stayover Clean', 'Normal', 'In Progress', 'David Kim', 1, 0, 0, 'Replace extra towels and restock espresso pods.'),
+(1, 'Inspection Audit', 'Normal', 'Inspected', 'Elena Rostova', 1, 1, 1, 'Passed 5-star quality sanitation audit.')
+ON CONFLICT DO NOTHING;

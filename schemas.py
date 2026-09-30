@@ -133,6 +133,11 @@ class RoomBase(BaseModel):
     sq_meters: int = Field(default=35, ge=15, le=500, description="Room area in square meters")
     is_smoking: bool = Field(default=False, description="Smoking policy")
     cleanliness_status: CleanlinessStatus = Field(default=CleanlinessStatus.INSPECTED, description="Housekeeping inspection status")
+    assigned_housekeeper: Optional[str] = Field(default=None, description="Currently assigned room attendant")
+    cleaning_priority: str = Field(default="Normal", description="Cleaning urgency priority (e.g. Normal, High, Urgent VIP)")
+    dnd_status: bool = Field(default=False, description="Do Not Disturb flag active")
+    last_cleaned_at: Optional[str] = Field(default=None, description="Timestamp when room was last cleaned")
+    last_inspected_at: Optional[str] = Field(default=None, description="Timestamp when room was inspected")
     lock_reason: Optional[str] = Field(default=None, description="Reason if locked or out of service")
 
 
@@ -159,6 +164,9 @@ class RoomStatusUpdate(BaseModel):
 class RoomHousekeepingUpdate(BaseModel):
     """Schema for updating room cleanliness and inspection checklist."""
     cleanliness_status: CleanlinessStatus = Field(..., description="Target housekeeping state")
+    assigned_housekeeper: Optional[str] = Field(default=None, description="Assigned room attendant")
+    cleaning_priority: Optional[str] = Field(default=None, description="Cleaning priority")
+    dnd_status: Optional[bool] = Field(default=None, description="Toggle Do Not Disturb flag")
     inspected_by: Optional[str] = Field(default="Head Housekeeper", description="Inspector staff identifier")
     notes: Optional[str] = Field(default="", description="Housekeeping inspection remarks")
 
@@ -723,6 +731,102 @@ class FolioStatementResponse(BaseModel):
     balance_due: float
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ==========================================
+# Module 4: Housekeeping & Room Status Management Schemas
+# ==========================================
+
+class HousekeepingTaskType(str, Enum):
+    """Classification of housekeeping work orders."""
+    CHECKOUT_TURNOVER = "Checkout Turnover"
+    STAYOVER_CLEAN = "Stayover Clean"
+    DEEP_CLEAN = "Deep Clean"
+    TOUCH_UP = "Touch-up"
+    INSPECTION_AUDIT = "Inspection Audit"
+
+
+class HousekeepingPriority(str, Enum):
+    """Urgency level for room cleaning dispatch."""
+    LOW = "Low"
+    NORMAL = "Normal"
+    HIGH = "High"
+    URGENT_VIP = "Urgent VIP Arrival"
+    RUSH_CHECKOUT = "Rush Checkout Turnover"
+
+
+class HousekeepingTaskStatus(str, Enum):
+    """Lifecycle progress of a housekeeping task."""
+    PENDING = "Pending"
+    IN_PROGRESS = "In Progress"
+    CLEANED = "Cleaned"
+    INSPECTED = "Inspected"
+    DELAYED_DND = "Delayed (DND)"
+
+
+class HousekeepingTaskBase(BaseModel):
+    """Core attributes for a housekeeping turnover work order."""
+    room_id: int = Field(..., description="Target room ID")
+    task_type: HousekeepingTaskType = Field(default=HousekeepingTaskType.CHECKOUT_TURNOVER, description="Cleaning task category")
+    priority: HousekeepingPriority = Field(default=HousekeepingPriority.NORMAL, description="Urgency priority")
+    assigned_housekeeper: Optional[str] = Field(default="Maria Santos", description="Assigned room attendant")
+    linen_changed: bool = Field(default=False, description="Fresh linens and bed remade")
+    amenities_restocked: bool = Field(default=False, description="Toiletries and minibar restocked")
+    bathroom_sanitized: bool = Field(default=False, description="Bathroom sanitized and disinfected")
+    notes: Optional[str] = Field(default="", description="Turnover instructions or special guest preferences")
+    inspector_notes: Optional[str] = Field(default="", description="Remarks by quality inspector")
+
+
+class HousekeepingTaskCreate(BaseModel):
+    """Payload to dispatch a new housekeeping assignment."""
+    room_id: int = Field(..., description="Target room ID")
+    task_type: HousekeepingTaskType = Field(default=HousekeepingTaskType.CHECKOUT_TURNOVER)
+    priority: HousekeepingPriority = Field(default=HousekeepingPriority.NORMAL)
+    assigned_housekeeper: Optional[str] = Field(default="Maria Santos")
+    notes: Optional[str] = Field(default="")
+
+
+class HousekeepingTaskUpdate(BaseModel):
+    """Payload to update an active housekeeping assignment."""
+    status: Optional[HousekeepingTaskStatus] = None
+    assigned_housekeeper: Optional[str] = None
+    priority: Optional[HousekeepingPriority] = None
+    linen_changed: Optional[bool] = None
+    amenities_restocked: Optional[bool] = None
+    bathroom_sanitized: Optional[bool] = None
+    notes: Optional[str] = None
+    inspected_by: Optional[str] = None
+    inspector_notes: Optional[str] = None
+
+
+class HousekeepingTaskResponse(HousekeepingTaskBase):
+    """Complete response payload for a dispatched housekeeping task."""
+    id: int
+    room_number: Optional[str] = None
+    room_type: Optional[str] = None
+    floor: Optional[int] = None
+    status: HousekeepingTaskStatus = HousekeepingTaskStatus.PENDING
+    inspected_by: Optional[str] = None
+    created_at: Optional[str | datetime] = None
+    started_at: Optional[str | datetime] = None
+    completed_at: Optional[str | datetime] = None
+    inspected_at: Optional[str | datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class HousekeepingSummaryResponse(BaseModel):
+    """Operational KPI dashboard summary for Executive Housekeeper and Front Desk."""
+    total_rooms: int
+    inspected_ready: int
+    clean_pending_inspection: int
+    dirty_needs_turnover: int
+    cleaning_in_progress: int
+    touch_up_required: int
+    dnd_active: int
+    urgent_priority_count: int
+    pending_tasks_count: int
+    active_housekeepers: List[str]
 
 
 

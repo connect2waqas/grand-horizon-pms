@@ -3892,6 +3892,12 @@ def ensure_housekeeping_tasks_table(conn: sqlite3.Connection):
         conn.commit()
     else:
         try:
+            cursor.execute("ALTER TABLE Rooms ADD COLUMN IF NOT EXISTS cleanliness_status VARCHAR(50) DEFAULT 'Inspected';")
+            cursor.execute("ALTER TABLE Rooms ADD COLUMN IF NOT EXISTS assigned_housekeeper VARCHAR(100) DEFAULT NULL;")
+            cursor.execute("ALTER TABLE Rooms ADD COLUMN IF NOT EXISTS cleaning_priority VARCHAR(50) DEFAULT 'Normal';")
+            cursor.execute("ALTER TABLE Rooms ADD COLUMN IF NOT EXISTS dnd_status INTEGER DEFAULT 0;")
+            cursor.execute("ALTER TABLE Rooms ADD COLUMN IF NOT EXISTS last_cleaned_at TIMESTAMPTZ DEFAULT NULL;")
+            cursor.execute("ALTER TABLE Rooms ADD COLUMN IF NOT EXISTS last_inspected_at TIMESTAMPTZ DEFAULT NULL;")
             cursor.execute("""
             CREATE TABLE IF NOT EXISTS HousekeepingTasks (
                 id SERIAL PRIMARY KEY,
@@ -3913,11 +3919,31 @@ def ensure_housekeeping_tasks_table(conn: sqlite3.Connection):
             );
             """)
             conn.commit()
-        except Exception:
+
+            cursor.execute("SELECT COUNT(*) as cnt FROM HousekeepingTasks;")
+            row = cursor.fetchone()
+            cnt = int(row["cnt"] if isinstance(row, dict) and "cnt" in row else (row[0] if row else 0))
+            if cnt == 0:
+                sample_tasks = [
+                    (3, "Checkout Turnover", "Rush Checkout Turnover", "Pending", "Maria Santos", 0, 0, 0, "Previous guest departed at 11 AM. New check-in expected at 3 PM."),
+                    (4, "Stayover Clean", "Normal", "In Progress", "David Kim", 1, 0, 0, "Replace extra towels and restock espresso pods."),
+                    (1, "Inspection Audit", "Normal", "Inspected", "Elena Rostova", 1, 1, 1, "Passed 5-star quality sanitation audit."),
+                ]
+                for t in sample_tasks:
+                    cursor.execute(
+                        """
+                        INSERT INTO HousekeepingTasks (room_id, task_type, priority, status, assigned_housekeeper, linen_changed, amenities_restocked, bathroom_sanitized, notes)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s);
+                        """,
+                        t,
+                    )
+                conn.commit()
+        except Exception as e:
             try:
                 conn.rollback()
             except Exception:
                 pass
+            print(f"ensure_housekeeping_tasks_table postgres error: {e}")
 
 
 def row_to_housekeeping_task_response(r) -> HousekeepingTaskResponse:
@@ -3969,15 +3995,15 @@ def get_housekeeping_dashboard(conn: sqlite3.Connection = Depends(get_db)):
     cursor = conn.cursor()
 
     # Room states
-    cursor.execute("SELECT cleanliness_status, status, dnd_status FROM Rooms;")
+    cursor.execute("SELECT r.* FROM Rooms r;")
     rooms = cursor.fetchall()
     total_rooms = len(rooms)
-    inspected_ready = sum(1 for r in rooms if r["cleanliness_status"] == "Inspected")
-    clean_pending_inspection = sum(1 for r in rooms if r["cleanliness_status"] == "Clean")
-    dirty_needs_turnover = sum(1 for r in rooms if r["cleanliness_status"] == "Dirty")
-    cleaning_in_progress = sum(1 for r in rooms if r["status"] == "Cleaning")
-    touch_up_required = sum(1 for r in rooms if r["cleanliness_status"] == "Touch-up Required")
-    dnd_active = sum(1 for r in rooms if "dnd_status" in (r.keys() if hasattr(r, "keys") else []) and bool(r["dnd_status"]))
+    inspected_ready = sum(1 for r in rooms if (r.get("cleanliness_status") if isinstance(r, dict) else r["cleanliness_status"]) == "Inspected")
+    clean_pending_inspection = sum(1 for r in rooms if (r.get("cleanliness_status") if isinstance(r, dict) else r["cleanliness_status"]) == "Clean")
+    dirty_needs_turnover = sum(1 for r in rooms if (r.get("cleanliness_status") if isinstance(r, dict) else r["cleanliness_status"]) == "Dirty")
+    cleaning_in_progress = sum(1 for r in rooms if (r.get("status") if isinstance(r, dict) else r["status"]) == "Cleaning")
+    touch_up_required = sum(1 for r in rooms if (r.get("cleanliness_status") if isinstance(r, dict) else r["cleanliness_status"]) == "Touch-up Required")
+    dnd_active = sum(1 for r in rooms if (r.get("dnd_status") if isinstance(r, dict) else (r["dnd_status"] if "dnd_status" in r.keys() else 0)))
 
     # Task states
     cursor.execute(
@@ -3989,7 +4015,7 @@ def get_housekeeping_dashboard(conn: sqlite3.Connection = Depends(get_db)):
         """
     )
     urg_row = cursor.fetchone()
-    urgent_priority_count = urg_row["cnt"] if urg_row else 0
+    urgent_priority_count = int(urg_row["cnt"] if isinstance(urg_row, dict) and "cnt" in urg_row else (urg_row[0] if urg_row else 0))
 
     cursor.execute(
         """
@@ -3999,7 +4025,7 @@ def get_housekeeping_dashboard(conn: sqlite3.Connection = Depends(get_db)):
         """
     )
     pend_row = cursor.fetchone()
-    pending_tasks_count = pend_row["cnt"] if pend_row else 0
+    pending_tasks_count = int(pend_row["cnt"] if isinstance(pend_row, dict) and "cnt" in pend_row else (pend_row[0] if pend_row else 0))
 
     cursor.execute(
         """
@@ -4009,7 +4035,11 @@ def get_housekeeping_dashboard(conn: sqlite3.Connection = Depends(get_db)):
         """
     )
     hk_rows = cursor.fetchall()
-    housekeepers = [h["assigned_housekeeper"] for h in hk_rows if h["assigned_housekeeper"]]
+    housekeepers = []
+    for h in hk_rows:
+        name = h["assigned_housekeeper"] if isinstance(h, dict) and "assigned_housekeeper" in h else (h[0] if h else None)
+        if name:
+            housekeepers.append(name)
     if not housekeepers:
         housekeepers = ["Maria Santos", "David Kim", "Elena Rostova"]
 

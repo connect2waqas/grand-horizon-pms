@@ -727,10 +727,10 @@ def seed_folio_charges() -> None:
 def seed_rate_plans() -> None:
     """
     Seeds enterprise rate plans (BAR, Non-Refundable, Bed & Breakfast, Extended Stay).
-    Idempotent using INSERT OR IGNORE based on unique rate plan code.
+    Idempotent using INSERT OR IGNORE / ON CONFLICT based on unique rate plan code.
     """
-    if IS_POSTGRES:
-        return
+    conn = get_db_connection()
+    cursor = conn.cursor()
     sample_plans = [
         ("BAR", "Best Available Rate", "Standard fully flexible rate with 24-hour cancellation flexibility.", 1.0, "Flexible (24h free cancellation)", "Room Only", 1, 1),
         ("NON_REF", "Non-Refundable Saver", "Advance purchase saver plan with guaranteed 15% discount. 100% non-refundable.", 0.85, "Non-Refundable (100% deposit locked)", "Room Only", 1, 1),
@@ -738,20 +738,56 @@ def seed_rate_plans() -> None:
         ("CORP_EXTENDED", "Extended Stay & Corporate", "Long-stay executive preferred partner pricing with 20% discount. Minimum 3 nights required.", 0.80, "Moderate (48h cancellation)", "Room Only", 3, 1),
     ]
 
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.executemany(
-        """
-        INSERT OR IGNORE INTO RatePlans (code, name, description, rate_multiplier, cancellation_policy, meal_plan, min_los, is_active)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?);
-        """,
-        sample_plans,
-    )
-    conn.commit()
-    cursor.execute("SELECT id, code, name FROM RatePlans;")
-    plans = cursor.fetchall()
+    if not IS_POSTGRES:
+        cursor.executemany(
+            """
+            INSERT OR IGNORE INTO RatePlans (code, name, description, rate_multiplier, cancellation_policy, meal_plan, min_los, is_active)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+            """,
+            sample_plans,
+        )
+        conn.commit()
+    else:
+        try:
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS RatePlans (
+                id SERIAL PRIMARY KEY,
+                code VARCHAR(30) UNIQUE NOT NULL,
+                name VARCHAR(100) NOT NULL,
+                description TEXT DEFAULT '',
+                rate_multiplier NUMERIC(4,2) NOT NULL DEFAULT 1.00 CHECK (rate_multiplier > 0),
+                cancellation_policy VARCHAR(60) NOT NULL DEFAULT 'Flexible (24h free cancellation)',
+                meal_plan VARCHAR(60) NOT NULL DEFAULT 'Room Only',
+                min_los INTEGER NOT NULL DEFAULT 1 CHECK (min_los >= 1),
+                is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            );
+            """)
+            conn.commit()
+            for p in sample_plans:
+                cursor.execute(
+                    """
+                    INSERT INTO RatePlans (code, name, description, rate_multiplier, cancellation_policy, meal_plan, min_los, is_active)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT (code) DO NOTHING;
+                    """,
+                    p,
+                )
+            conn.commit()
+        except Exception as e:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            print(f"PostgreSQL RatePlans seed note: {e}")
+
+    try:
+        cursor.execute("SELECT id, code, name FROM RatePlans;")
+        plans = cursor.fetchall()
+        print(f"Rate plans seeded. Total in catalog: {len(plans)}")
+    except Exception:
+        pass
     conn.close()
-    print(f"Rate plans seeded. Total in catalog: {len(plans)}")
 
 
 if __name__ == "__main__":

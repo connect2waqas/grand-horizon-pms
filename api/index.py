@@ -133,11 +133,11 @@ async def lifespan(app: FastAPI):
             init_db()
             seed_rooms()
             seed_amenities()
-            seed_rate_plans()
             seed_coupons()
             seed_audit_logs()
             seed_maintenance_tickets()
             seed_folio_charges()
+        seed_rate_plans()
     except Exception as e:
         print(f"Lifespan initialization note: {e}")
     yield
@@ -833,7 +833,11 @@ def calculate_dynamic_pricing(
         cursor.execute("SELECT * FROM RatePlans WHERE UPPER(code) = ? AND is_active = 1;", (clean_plan_code,))
         plan_row = cursor.fetchone()
     except Exception:
-        pass
+        if IS_POSTGRES:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
 
     if not plan_row:
         # Fallback to standard Best Available Rate (BAR) defaults
@@ -2491,6 +2495,65 @@ def get_pricing_quote(
     )
 
 
+def ensure_rate_plans_table(conn: sqlite3.Connection):
+    """Safely guarantees RatePlans table and initial catalog exist across both SQLite and PostgreSQL."""
+    cursor = conn.cursor()
+    if not IS_POSTGRES:
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS RatePlans (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            code TEXT NOT NULL UNIQUE,
+            name TEXT NOT NULL,
+            description TEXT DEFAULT '',
+            rate_multiplier REAL NOT NULL DEFAULT 1.0 CHECK(rate_multiplier > 0),
+            cancellation_policy TEXT NOT NULL DEFAULT 'Flexible (24h free cancellation)',
+            meal_plan TEXT NOT NULL DEFAULT 'Room Only',
+            min_los INTEGER NOT NULL DEFAULT 1 CHECK(min_los >= 1),
+            is_active INTEGER NOT NULL DEFAULT 1 CHECK(is_active IN (0, 1)),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        """)
+        conn.commit()
+    else:
+        try:
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS RatePlans (
+                id SERIAL PRIMARY KEY,
+                code VARCHAR(30) UNIQUE NOT NULL,
+                name VARCHAR(100) NOT NULL,
+                description TEXT DEFAULT '',
+                rate_multiplier NUMERIC(4,2) NOT NULL DEFAULT 1.00 CHECK (rate_multiplier > 0),
+                cancellation_policy VARCHAR(60) NOT NULL DEFAULT 'Flexible (24h free cancellation)',
+                meal_plan VARCHAR(60) NOT NULL DEFAULT 'Room Only',
+                min_los INTEGER NOT NULL DEFAULT 1 CHECK (min_los >= 1),
+                is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            );
+            """)
+            conn.commit()
+            sample_plans = [
+                ("BAR", "Best Available Rate", "Standard fully flexible rate with 24-hour cancellation flexibility.", 1.0, "Flexible (24h free cancellation)", "Room Only", 1, 1),
+                ("NON_REF", "Non-Refundable Saver", "Advance purchase saver plan with guaranteed 15% discount. 100% non-refundable.", 0.85, "Non-Refundable (100% deposit locked)", "Room Only", 1, 1),
+                ("BB_PACKAGE", "Bed & Breakfast Package", "Includes gourmet daily continental breakfast buffet for all guests.", 1.15, "Flexible (24h free cancellation)", "Continental Breakfast Included", 1, 1),
+                ("CORP_EXTENDED", "Extended Stay & Corporate", "Long-stay executive preferred partner pricing with 20% discount. Minimum 3 nights required.", 0.80, "Moderate (48h cancellation)", "Room Only", 3, 1),
+            ]
+            for p in sample_plans:
+                cursor.execute(
+                    """
+                    INSERT INTO RatePlans (code, name, description, rate_multiplier, cancellation_policy, meal_plan, min_los, is_active)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT (code) DO NOTHING;
+                    """,
+                    p,
+                )
+            conn.commit()
+        except Exception:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+
+
 @app.get(
     "/api/rates/plans",
     response_model=List[RatePlanResponse],
@@ -2504,20 +2567,21 @@ def get_rate_plans(
 ):
     """Retrieves all rate plans with their pricing multipliers, meal plans, cancellation policies, and MLOS rules."""
     cursor = conn.cursor()
-    has_table = True
-    if not IS_POSTGRES:
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='RatePlans';")
-        has_table = bool(cursor.fetchone())
-    if not has_table:
-        return []
+    try:
+        ensure_rate_plans_table(conn)
+    except Exception:
+        pass
 
     query = "SELECT * FROM RatePlans"
     params = []
     if active_only:
         query += " WHERE is_active = 1"
     query += " ORDER BY rate_multiplier ASC;"
-    cursor.execute(query, params)
-    rows = cursor.fetchall()
+    try:
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+    except Exception:
+        return []
 
     plans = []
     for r in rows:
@@ -2552,6 +2616,7 @@ def create_rate_plan(
 ):
     """Creates a new rate plan with specific rate multiplier, cancellation terms, meal inclusions, and MLOS restrictions."""
     cursor = conn.cursor()
+    ensure_rate_plans_table(conn)
     clean_code = plan_data.code.strip().upper()
     cursor.execute("SELECT id FROM RatePlans WHERE UPPER(code) = ?;", (clean_code,))
     if cursor.fetchone():

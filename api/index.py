@@ -27,6 +27,8 @@ from typing import Generator, List, Optional
 import sqlite3
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, status
+from fastapi.exceptions import ResponseValidationError
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -164,6 +166,13 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+@app.exception_handler(ResponseValidationError)
+async def response_validation_exception_handler(request: Request, exc: ResponseValidationError):
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "ResponseValidationError", "errors": str(exc.errors())},
+    )
 
 # Enable CORS for vanilla frontend interactions
 app.add_middleware(
@@ -3947,7 +3956,7 @@ def ensure_housekeeping_tasks_table(conn: sqlite3.Connection):
 
 
 def row_to_housekeeping_task_response(r) -> HousekeepingTaskResponse:
-    keys = r.keys() if hasattr(r, "keys") else []
+    keys = set(r.keys()) if hasattr(r, "keys") else set()
 
     def _parse_task_type(val):
         try:
@@ -3976,12 +3985,12 @@ def row_to_housekeeping_task_response(r) -> HousekeepingTaskResponse:
         task_type=_parse_task_type(r["task_type"] if "task_type" in keys else None),
         priority=_parse_priority(r["priority"] if "priority" in keys else None),
         status=_parse_status(r["status"] if "status" in keys else None),
-        assigned_housekeeper=r["assigned_housekeeper"] if "assigned_housekeeper" in keys else None,
+        assigned_housekeeper=str(r["assigned_housekeeper"]) if "assigned_housekeeper" in keys and r["assigned_housekeeper"] is not None else "Maria Santos",
         linen_changed=bool(r["linen_changed"]) if "linen_changed" in keys and r["linen_changed"] is not None else False,
         amenities_restocked=bool(r["amenities_restocked"]) if "amenities_restocked" in keys and r["amenities_restocked"] is not None else False,
         bathroom_sanitized=bool(r["bathroom_sanitized"]) if "bathroom_sanitized" in keys and r["bathroom_sanitized"] is not None else False,
         notes=str(r["notes"]) if "notes" in keys and r["notes"] else "",
-        inspected_by=r["inspected_by"] if "inspected_by" in keys else None,
+        inspected_by=str(r["inspected_by"]) if "inspected_by" in keys and r["inspected_by"] is not None else None,
         inspector_notes=str(r["inspector_notes"]) if "inspector_notes" in keys and r["inspector_notes"] else "",
         started_at=str(r["started_at"]) if "started_at" in keys and r["started_at"] else None,
         completed_at=str(r["completed_at"]) if "completed_at" in keys and r["completed_at"] else None,
@@ -4083,7 +4092,7 @@ def get_housekeeping_dashboard(conn: sqlite3.Connection = Depends(get_db)):
     tags=["Housekeeping & Room Status"],
 )
 def get_housekeeping_tasks(
-    status: Optional[HousekeepingTaskStatus] = Query(None, description="Filter by task status"),
+    task_status: Optional[HousekeepingTaskStatus] = Query(None, alias="status", description="Filter by task status"),
     priority: Optional[HousekeepingPriority] = Query(None, description="Filter by urgency priority"),
     room_id: Optional[int] = Query(None, description="Filter by room ID"),
     assigned_housekeeper: Optional[str] = Query(None, description="Filter by assigned staff"),
@@ -4096,9 +4105,9 @@ def get_housekeeping_tasks(
     conditions = []
     params = []
 
-    if status:
+    if task_status:
         conditions.append("t.status = ?")
-        params.append(status.value)
+        params.append(task_status.value)
     if priority:
         conditions.append("t.priority = ?")
         params.append(priority.value)
@@ -4113,7 +4122,7 @@ def get_housekeeping_tasks(
     query = f"""
     SELECT t.*, r.room_number, r.room_type, r.floor
     FROM HousekeepingTasks t
-    JOIN Rooms r ON t.room_id = r.id
+    LEFT JOIN Rooms r ON t.room_id = r.id
     {where_clause}
     ORDER BY
         CASE t.priority

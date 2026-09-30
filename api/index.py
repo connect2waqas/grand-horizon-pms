@@ -3888,6 +3888,8 @@ def ensure_housekeeping_tasks_table(conn: sqlite3.Connection):
         """)
         cursor.execute("PRAGMA table_info(Rooms);")
         r_cols = {r[1] for r in cursor.fetchall()}
+        if "floor" not in r_cols:
+            cursor.execute("ALTER TABLE Rooms ADD COLUMN floor INTEGER NOT NULL DEFAULT 1;")
         if "assigned_housekeeper" not in r_cols:
             cursor.execute("ALTER TABLE Rooms ADD COLUMN assigned_housekeeper TEXT DEFAULT NULL;")
         if "cleaning_priority" not in r_cols:
@@ -3901,6 +3903,7 @@ def ensure_housekeeping_tasks_table(conn: sqlite3.Connection):
         conn.commit()
     else:
         try:
+            cursor.execute("ALTER TABLE Rooms ADD COLUMN IF NOT EXISTS floor INTEGER DEFAULT 1;")
             cursor.execute("ALTER TABLE Rooms ADD COLUMN IF NOT EXISTS cleanliness_status VARCHAR(50) DEFAULT 'Inspected';")
             cursor.execute("ALTER TABLE Rooms ADD COLUMN IF NOT EXISTS assigned_housekeeper VARCHAR(100) DEFAULT NULL;")
             cursor.execute("ALTER TABLE Rooms ADD COLUMN IF NOT EXISTS cleaning_priority VARCHAR(50) DEFAULT 'Normal';")

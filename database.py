@@ -322,6 +322,7 @@ def init_db() -> None:
         guarantee_type TEXT NOT NULL DEFAULT 'Guaranteed',
         early_checkin_requested INTEGER NOT NULL DEFAULT 0,
         late_checkout_requested INTEGER NOT NULL DEFAULT 0,
+        rate_plan_code TEXT NOT NULL DEFAULT 'BAR',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (guest_id) REFERENCES Guests(id) ON DELETE CASCADE,
         FOREIGN KEY (room_id) REFERENCES Rooms(id) ON DELETE RESTRICT,
@@ -329,7 +330,7 @@ def init_db() -> None:
     );
     """)
 
-    # Non-destructive migrations for existing Bookings table (Module 2 Deepening)
+    # Non-destructive migrations for existing Bookings table (Module 2 & 3 Deepening)
     if not IS_POSTGRES:
         cursor.execute("PRAGMA table_info(Bookings);")
         existing_booking_cols = {row[1] for row in cursor.fetchall()}
@@ -351,6 +352,8 @@ def init_db() -> None:
             cursor.execute("ALTER TABLE Bookings ADD COLUMN early_checkin_requested INTEGER NOT NULL DEFAULT 0;")
         if "late_checkout_requested" not in existing_booking_cols:
             cursor.execute("ALTER TABLE Bookings ADD COLUMN late_checkout_requested INTEGER NOT NULL DEFAULT 0;")
+        if "rate_plan_code" not in existing_booking_cols:
+            cursor.execute("ALTER TABLE Bookings ADD COLUMN rate_plan_code TEXT NOT NULL DEFAULT 'BAR';")
     else:
         cursor.execute("ALTER TABLE Bookings ADD COLUMN IF NOT EXISTS coupon_code TEXT DEFAULT NULL;")
         cursor.execute("ALTER TABLE Bookings ADD COLUMN IF NOT EXISTS discount_amount REAL NOT NULL DEFAULT 0.0;")
@@ -361,6 +364,23 @@ def init_db() -> None:
         cursor.execute("ALTER TABLE Bookings ADD COLUMN IF NOT EXISTS guarantee_type TEXT NOT NULL DEFAULT 'Guaranteed';")
         cursor.execute("ALTER TABLE Bookings ADD COLUMN IF NOT EXISTS early_checkin_requested INTEGER NOT NULL DEFAULT 0;")
         cursor.execute("ALTER TABLE Bookings ADD COLUMN IF NOT EXISTS late_checkout_requested INTEGER NOT NULL DEFAULT 0;")
+        cursor.execute("ALTER TABLE Bookings ADD COLUMN IF NOT EXISTS rate_plan_code TEXT NOT NULL DEFAULT 'BAR';")
+
+    # Table: RatePlans (Module 3: Rates, Dynamic Pricing & Yield Management)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS RatePlans (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        code TEXT NOT NULL UNIQUE,
+        name TEXT NOT NULL,
+        description TEXT DEFAULT '',
+        rate_multiplier REAL NOT NULL DEFAULT 1.0 CHECK(rate_multiplier > 0),
+        cancellation_policy TEXT NOT NULL DEFAULT 'Flexible (24h free cancellation)',
+        meal_plan TEXT NOT NULL DEFAULT 'Room Only',
+        min_los INTEGER NOT NULL DEFAULT 1 CHECK(min_los >= 1),
+        is_active INTEGER NOT NULL DEFAULT 1 CHECK(is_active IN (0, 1)),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
 
     # Table 4: Amenities (Catalog of bookable hotel add-ons)
     cursor.execute("""
@@ -704,11 +724,42 @@ def seed_folio_charges() -> None:
     conn.close()
 
 
+def seed_rate_plans() -> None:
+    """
+    Seeds enterprise rate plans (BAR, Non-Refundable, Bed & Breakfast, Extended Stay).
+    Idempotent using INSERT OR IGNORE based on unique rate plan code.
+    """
+    if IS_POSTGRES:
+        return
+    sample_plans = [
+        ("BAR", "Best Available Rate", "Standard fully flexible rate with 24-hour cancellation flexibility.", 1.0, "Flexible (24h free cancellation)", "Room Only", 1, 1),
+        ("NON_REF", "Non-Refundable Saver", "Advance purchase saver plan with guaranteed 15% discount. 100% non-refundable.", 0.85, "Non-Refundable (100% deposit locked)", "Room Only", 1, 1),
+        ("BB_PACKAGE", "Bed & Breakfast Package", "Includes gourmet daily continental breakfast buffet for all guests.", 1.15, "Flexible (24h free cancellation)", "Continental Breakfast Included", 1, 1),
+        ("CORP_EXTENDED", "Extended Stay & Corporate", "Long-stay executive preferred partner pricing with 20% discount. Minimum 3 nights required.", 0.80, "Moderate (48h cancellation)", "Room Only", 3, 1),
+    ]
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.executemany(
+        """
+        INSERT OR IGNORE INTO RatePlans (code, name, description, rate_multiplier, cancellation_policy, meal_plan, min_los, is_active)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+        """,
+        sample_plans,
+    )
+    conn.commit()
+    cursor.execute("SELECT id, code, name FROM RatePlans;")
+    plans = cursor.fetchall()
+    conn.close()
+    print(f"Rate plans seeded. Total in catalog: {len(plans)}")
+
+
 if __name__ == "__main__":
     print(f"Target SQLite Database: {DATABASE_PATH}")
     init_db()
     seed_rooms()
     seed_amenities()
+    seed_rate_plans()
     seed_coupons()
     seed_audit_logs()
     seed_maintenance_tickets()

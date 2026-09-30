@@ -68,6 +68,11 @@ const btnSpinner = submitBookingBtn.querySelector(".btn-spinner");
 const rateCalculation = document.getElementById("rateCalculation");
 const estimateTotal = document.getElementById("estimateTotal");
 
+// DOM Elements: Module 3 Rate Plans & Yield Management
+const bookingRatePlan = document.getElementById("bookingRatePlan");
+const ratePlanBadge = document.getElementById("ratePlanBadge");
+const ratePlanPolicyText = document.getElementById("ratePlanPolicyText");
+
 // DOM Elements: Module 11 Dynamic Pricing & Promotional Coupons
 const couponCodeInput = document.getElementById("couponCodeInput");
 const btnApplyCoupon = document.getElementById("btnApplyCoupon");
@@ -223,6 +228,27 @@ function setupEventListeners() {
   });
 
   bookingCheckOut.addEventListener("change", updateCostEstimate);
+
+  // Module 3 Rate Plan & Policy Listener
+  if (bookingRatePlan) {
+    bookingRatePlan.addEventListener("change", () => {
+      const code = bookingRatePlan.value;
+      if (code === "BAR") {
+        if (ratePlanBadge) ratePlanBadge.textContent = "BAR • 1.0x";
+        if (ratePlanPolicyText) ratePlanPolicyText.textContent = "Flexible 24h free cancellation • Room Only • Min 1 night";
+      } else if (code === "NON_REF") {
+        if (ratePlanBadge) ratePlanBadge.textContent = "NON_REF • 0.85x";
+        if (ratePlanPolicyText) ratePlanPolicyText.textContent = "Non-Refundable (Deposit locked) • 15% Savings • Room Only";
+      } else if (code === "BB_PACKAGE") {
+        if (ratePlanBadge) ratePlanBadge.textContent = "BB_PACKAGE • 1.15x";
+        if (ratePlanPolicyText) ratePlanPolicyText.textContent = "Flexible cancellation • Includes Gourmet Continental Breakfast";
+      } else if (code === "CORP_EXTENDED") {
+        if (ratePlanBadge) ratePlanBadge.textContent = "CORP_EXTENDED • 0.80x";
+        if (ratePlanPolicyText) ratePlanPolicyText.textContent = "Moderate 48h cancellation • 20% Savings • Min 3 nights required";
+      }
+      updateCostEstimate();
+    });
+  }
 
   // Module 11 Dynamic Pricing & Coupon Listeners
   if (toggleDynamicPricing) {
@@ -990,10 +1016,12 @@ async function updateCostEstimate() {
   }
 
   try {
+    const ratePlanCode = bookingRatePlan ? bookingRatePlan.value : "BAR";
     const payload = {
       room_id: selectedRoomId,
       check_in_date: checkIn,
       check_out_date: checkOut,
+      rate_plan_code: ratePlanCode,
       coupon_code: couponCode,
       amenity_ids: [],
     };
@@ -1021,12 +1049,16 @@ async function updateCostEstimate() {
     rateCalculation.textContent = `$${avgNightly} avg/night • ${quote.nights} night${quote.nights > 1 ? "s" : ""}`;
 
     if (pricingEngineStatus) {
-      if (quote.coupon_applied) {
+      if (quote.min_los_met === false) {
+        pricingEngineStatus.textContent = `⚠️ Min ${quote.min_los_required} Nights Required`;
+      } else if (quote.coupon_applied) {
         pricingEngineStatus.textContent = `Promo ${quote.coupon_code} (-$${quote.coupon_discount.toFixed(2)})`;
+      } else if (quote.occupancy_surge_total > 0) {
+        pricingEngineStatus.textContent = `Demand Yield Surge (+${quote.occupancy_rate}% Occ)`;
       } else if (quote.weekend_surge_total > 0) {
         pricingEngineStatus.textContent = "Weekend Dynamic Surge";
       } else {
-        pricingEngineStatus.textContent = "Smart Dynamic Pricing";
+        pricingEngineStatus.textContent = `${quote.rate_plan_name || "Smart Dynamic Pricing"}`;
       }
     }
 
@@ -1047,6 +1079,16 @@ function renderQuoteBreakdown(quote) {
     </div>
   `;
 
+  if (quote.rate_plan_adjustment && quote.rate_plan_adjustment !== 0) {
+    const isDiscount = quote.rate_plan_adjustment < 0;
+    html += `
+      <div class="quote-line ${isDiscount ? 'quote-discount' : 'quote-surge'}">
+        <span>Rate Plan (${escapeHtml(quote.rate_plan_code)}) ${isDiscount ? 'Savings' : 'Package Surcharge'}</span>
+        <span>${isDiscount ? '-' : '+'}$${Math.abs(quote.rate_plan_adjustment).toFixed(2)}</span>
+      </div>
+    `;
+  }
+
   if (quote.weekend_surge_total > 0) {
     html += `
       <div class="quote-line quote-surge">
@@ -1061,6 +1103,15 @@ function renderQuoteBreakdown(quote) {
       <div class="quote-line quote-surge">
         <span>High-Season Summer Surge (+15%)</span>
         <span>+$${quote.seasonal_surge_total.toFixed(2)}</span>
+      </div>
+    `;
+  }
+
+  if (quote.occupancy_surge_total > 0) {
+    html += `
+      <div class="quote-line quote-surge">
+        <span>Occupancy Yield Surge (${quote.occupancy_rate}% Property Occ)</span>
+        <span>+$${quote.occupancy_surge_total.toFixed(2)}</span>
       </div>
     `;
   }
@@ -1102,6 +1153,19 @@ function renderQuoteBreakdown(quote) {
       <span style="color: #6ee7b7; font-weight: 700;">$${quote.grand_total.toFixed(2)}</span>
     </div>
   `;
+
+  if (quote.min_los_met === false) {
+    html += `
+      <div class="quote-mlos-warning">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="8" x2="12" y2="12"></line>
+          <line x1="12" y1="16" x2="12.01" y2="16"></line>
+        </svg>
+        <span>${escapeHtml(quote.rate_plan_name)} requires a minimum stay of ${quote.min_los_required} nights. (Requested: ${quote.nights} night${quote.nights > 1 ? 's' : ''})</span>
+      </div>
+    `;
+  }
 
   quoteBreakdownContainer.innerHTML = html;
 }
@@ -1182,6 +1246,7 @@ async function handleBookingSubmit(event) {
     return;
   }
 
+  const ratePlan = bookingRatePlan ? bookingRatePlan.value : "BAR";
   const couponCode = couponCodeInput && couponCodeInput.value.trim() ? couponCodeInput.value.trim().toUpperCase() : null;
   const applyDynamic = toggleDynamicPricing ? toggleDynamicPricing.checked : false;
 
@@ -1189,6 +1254,7 @@ async function handleBookingSubmit(event) {
     room_id: selectedRoomId,
     check_in_date: checkIn,
     check_out_date: checkOut,
+    rate_plan_code: ratePlan,
     adults: bookingAdults ? parseInt(bookingAdults.value || 1, 10) : 1,
     children: bookingChildren ? parseInt(bookingChildren.value || 0, 10) : 0,
     estimated_arrival_time: bookingETA ? (bookingETA.value || "15:00") : "15:00",
@@ -1258,6 +1324,9 @@ function showBookingReceipt(booking) {
     `;
   }
 
+  const pCode = booking.rate_plan_code || "BAR";
+  const pClass = pCode === "NON_REF" ? "plan-pill-saver" : (pCode === "BB_PACKAGE" ? "plan-pill-bb" : (pCode === "CORP_EXTENDED" ? "plan-pill-corp" : "plan-pill-bar"));
+
   const adults = booking.adults || 1;
   const children = booking.children || 0;
   const partyText = `${adults} Adult${adults > 1 ? 's' : ''}${children > 0 ? ` + ${children} Child${children > 1 ? 'ren' : ''}` : ''}`;
@@ -1289,6 +1358,10 @@ function showBookingReceipt(booking) {
       <div class="receipt-row">
         <span class="receipt-label">Status</span>
         <span class="receipt-value" style="color: var(--status-available-text);">${booking.booking_status}</span>
+      </div>
+      <div class="receipt-row">
+        <span class="receipt-label">Rate Plan</span>
+        <span class="receipt-value"><span class="booking-plan-pill ${pClass}">${pCode}</span></span>
       </div>
       <div class="receipt-row">
         <span class="receipt-label">Guarantee Policy</span>
@@ -1458,13 +1531,17 @@ function renderBookings(bookings) {
 
     const specialRequestSnippet = b.special_requests ? `<div class="booking-special-req-snippet" title="${escapeHtml(b.special_requests)}">📝 ${escapeHtml(b.special_requests.length > 25 ? b.special_requests.slice(0, 25) + '...' : b.special_requests)}</div>` : '';
 
+    const planCode = b.rate_plan_code || "BAR";
+    const planClass = planCode === "NON_REF" ? "plan-pill-saver" : (planCode === "BB_PACKAGE" ? "plan-pill-bb" : (planCode === "CORP_EXTENDED" ? "plan-pill-corp" : "plan-pill-bar"));
+    const ratePlanPill = `<span class="booking-plan-pill ${planClass}" title="Rate Plan: ${escapeHtml(planCode)}">${escapeHtml(planCode)}</span>`;
+
     tr.innerHTML = `
       <td><span class="table-folio-id">#${b.id}</span></td>
       <td>
         <div class="table-guest-meta">
           <div><span class="table-guest-name">${guestName}</span> ${guaranteeBadge}</div>
           <span class="table-guest-contact">${guestContact}</span>
-          <div>${partyBadge}</div>
+          <div>${partyBadge} ${ratePlanPill}</div>
           ${specialRequestSnippet}
         </div>
       </td>

@@ -334,6 +334,23 @@
               </div>
             </div>
 
+            <!-- Module 3: Rate Plan & Cancellation Terms -->
+            <div class="form-control">
+              <div class="rate-plan-header-row">
+                <label for="bookingRatePlan">Rate Plan & Terms <span class="required">*</span></label>
+                <span id="ratePlanBadge" class="rate-plan-badge">BAR • 1.0x</span>
+              </div>
+              <select id="bookingRatePlan" name="rate_plan_code">
+                <option value="BAR" selected>Best Available Rate (1.0x • Flexible 24h cancellation)</option>
+                <option value="NON_REF">Non-Refundable Saver (0.85x • 15% Off • Deposit Locked)</option>
+                <option value="BB_PACKAGE">Bed & Breakfast Package (1.15x • Includes Continental Breakfast)</option>
+                <option value="CORP_EXTENDED">Extended Stay & Corporate (0.80x • 20% Off • Min 3 Nights)</option>
+              </select>
+              <div id="ratePlanPolicyHint" class="rate-plan-hint">
+                <span id="ratePlanPolicyText">Flexible 24h free cancellation • Room Only • Min 1 night</span>
+              </div>
+            </div>
+
             <!-- Party Size & Capacity (Module 2 Deepening) -->
             <div class="form-row">
               <div class="form-control">

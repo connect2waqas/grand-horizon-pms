@@ -36,6 +36,7 @@ from database import (
     init_db,
     seed_rooms,
     seed_amenities,
+    seed_rate_plans,
     seed_coupons,
     record_audit_log,
     seed_audit_logs,
@@ -54,6 +55,12 @@ from schemas import (
     BookingResponse,
     BookingStatus,
     GuaranteeType,
+    RatePlanBase,
+    RatePlanCreate,
+    RatePlanResponse,
+    CancellationPolicy,
+    MealPlanType,
+    DemandYieldTier,
     CouponCreate,
     CouponResponse,
     CouponValidateRequest,
@@ -126,6 +133,7 @@ async def lifespan(app: FastAPI):
             init_db()
             seed_rooms()
             seed_amenities()
+            seed_rate_plans()
             seed_coupons()
             seed_audit_logs()
             seed_maintenance_tickets()
@@ -749,8 +757,46 @@ def get_amenities(conn: sqlite3.Connection = Depends(get_db)):
 
 
 # ==========================================
-# Module 11: Dynamic Pricing & Seasonal Rate Engine
 # ==========================================
+# Module 3 & 11: Rate Plans, Dynamic Pricing & Yield Management Engine
+# ==========================================
+
+def compute_occupancy_yield(conn: sqlite3.Connection, check_in_date: date, check_out_date: date) -> tuple[float, DemandYieldTier, float]:
+    """
+    Computes overall hotel occupancy percentage during the stay dates and determines the demand yield tier.
+    Returns: (occupancy_percentage, demand_tier, yield_surge_rate)
+    """
+    cursor = conn.cursor()
+    # 1. Total active room inventory (excluding maintenance)
+    cursor.execute("SELECT COUNT(*) as total_rooms FROM Rooms WHERE status != 'Maintenance';")
+    row = cursor.fetchone()
+    total_rooms = row["total_rooms"] if row and row["total_rooms"] else 6
+
+    # 2. Total distinct rooms booked during overlapping interval
+    cursor.execute(
+        """
+        SELECT COUNT(DISTINCT room_id) as booked_count
+        FROM Bookings
+        WHERE booking_status != 'Cancelled'
+          AND check_in_date < ?
+          AND check_out_date > ?;
+        """,
+        (check_out_date.isoformat(), check_in_date.isoformat()),
+    )
+    b_row = cursor.fetchone()
+    booked_count = b_row["booked_count"] if b_row and b_row["booked_count"] else 0
+
+    occupancy_pct = round(min(100.0, (booked_count / max(1, total_rooms)) * 100.0), 1)
+
+    if occupancy_pct >= 85.0:
+        return occupancy_pct, DemandYieldTier.PEAK_COMPRESSION, 0.30
+    elif occupancy_pct >= 70.0:
+        return occupancy_pct, DemandYieldTier.HIGH_DEMAND, 0.15
+    elif occupancy_pct >= 40.0:
+        return occupancy_pct, DemandYieldTier.NORMAL_DEMAND, 0.0
+    else:
+        return occupancy_pct, DemandYieldTier.LOW_DEMAND, 0.0
+
 
 def calculate_dynamic_pricing(
     room: sqlite3.Row,
@@ -759,14 +805,17 @@ def calculate_dynamic_pricing(
     guest_id: Optional[int] = None,
     amenity_ids: list[int] = [],
     coupon_code: Optional[str] = None,
+    rate_plan_code: Optional[str] = "BAR",
     apply_dynamic_pricing: bool = True,
     conn: Optional[sqlite3.Connection] = None,
 ) -> PriceQuoteResponse:
     """
     Computes transparent rate quotation including:
-    - Base room rate per night
+    - Base room rate per night modulated by Rate Plan Multiplier (BAR, Non-Refundable, B&B)
     - Weekend Surge (+20% on Friday & Saturday nights)
     - High-Season Summer Surge (+15% in June, July, August)
+    - Occupancy-based Yield Management Demand Surge (-5% to +30%)
+    - Minimum Length of Stay (MLOS) verification
     - Length-of-Stay Discount (10% for >= 5 nights, 15% for >= 7 nights)
     - VIP Loyalty Discount (Silver 5%, Gold 10%, Platinum 15%)
     - Add-on amenities total
@@ -775,12 +824,47 @@ def calculate_dynamic_pricing(
     """
     cursor = conn.cursor()
     nights = (check_out_date - check_in_date).days
-    base_rate = float(room["price_per_night"])
+    raw_base_rate = float(room["price_per_night"])
+
+    # 1. Resolve Rate Plan
+    clean_plan_code = (rate_plan_code or "BAR").strip().upper()
+    plan_row = None
+    try:
+        cursor.execute("SELECT * FROM RatePlans WHERE UPPER(code) = ? AND is_active = 1;", (clean_plan_code,))
+        plan_row = cursor.fetchone()
+    except Exception:
+        pass
+
+    if not plan_row:
+        # Fallback to standard Best Available Rate (BAR) defaults
+        plan_row = {
+            "code": "BAR",
+            "name": "Best Available Rate",
+            "rate_multiplier": 1.0,
+            "cancellation_policy": "Flexible (24h free cancellation)",
+            "meal_plan": "Room Only",
+            "min_los": 1,
+        }
+
+    plan_multiplier = float(plan_row["rate_multiplier"])
+    plan_name = str(plan_row["name"])
+    plan_cancellation = str(plan_row["cancellation_policy"])
+    plan_meal = str(plan_row["meal_plan"])
+    min_los_required = int(plan_row["min_los"]) if "min_los" in plan_row.keys() else 1
+    min_los_met = nights >= min_los_required
+
+    # Apply rate plan multiplier to base nightly rate
+    base_rate = round(raw_base_rate * plan_multiplier, 2)
+    raw_room_total = round(nights * base_rate, 2)
+    rate_plan_adjustment = round((base_rate - raw_base_rate) * nights, 2)
+
+    # 2. Occupancy Yield Factor
+    occupancy_pct, demand_tier, demand_surge_rate = compute_occupancy_yield(conn, check_in_date, check_out_date)
 
     nightly_details: list[NightlyRateDetail] = []
-    raw_room_total = round(nights * base_rate, 2)
     weekend_surge_total = 0.0
     seasonal_surge_total = 0.0
+    occupancy_surge_total = 0.0
 
     curr_date = check_in_date
     while curr_date < check_out_date:
@@ -791,13 +875,16 @@ def calculate_dynamic_pricing(
         if apply_dynamic_pricing:
             wknd_amt = round(base_rate * 0.20, 2) if is_wknd else 0.0
             smr_amt = round(base_rate * 0.15, 2) if is_smr else 0.0
+            demand_amt = round(base_rate * demand_surge_rate, 2) if demand_surge_rate != 0.0 else 0.0
         else:
             wknd_amt = 0.0
             smr_amt = 0.0
+            demand_amt = 0.0
 
-        eff_rate = round(base_rate + wknd_amt + smr_amt, 2)
+        eff_rate = round(base_rate + wknd_amt + smr_amt + demand_amt, 2)
         weekend_surge_total += wknd_amt
         seasonal_surge_total += smr_amt
+        occupancy_surge_total += demand_amt
 
         nightly_details.append(
             NightlyRateDetail(
@@ -808,6 +895,8 @@ def calculate_dynamic_pricing(
                 weekend_surge=wknd_amt,
                 is_summer=is_smr,
                 summer_surge=smr_amt,
+                demand_yield_surge=demand_amt,
+                rate_plan_multiplier=plan_multiplier,
                 effective_rate=eff_rate,
             )
         )
@@ -815,7 +904,8 @@ def calculate_dynamic_pricing(
 
     weekend_surge_total = round(weekend_surge_total, 2)
     seasonal_surge_total = round(seasonal_surge_total, 2)
-    adjusted_room_charge = round(raw_room_total + weekend_surge_total + seasonal_surge_total, 2)
+    occupancy_surge_total = round(occupancy_surge_total, 2)
+    adjusted_room_charge = round(raw_room_total + weekend_surge_total + seasonal_surge_total + occupancy_surge_total, 2)
 
     # Length of Stay Discount
     los_discount = 0.0
@@ -906,6 +996,8 @@ def calculate_dynamic_pricing(
         raw_room_total=raw_room_total,
         weekend_surge_total=weekend_surge_total,
         seasonal_surge_total=seasonal_surge_total,
+        occupancy_surge_total=occupancy_surge_total,
+        rate_plan_adjustment=rate_plan_adjustment,
         length_of_stay_discount=los_discount,
         vip_discount=vip_discount,
         net_room_charge=net_room_charge,
@@ -913,6 +1005,14 @@ def calculate_dynamic_pricing(
         coupon_discount=coupon_discount,
         coupon_code=clean_code if coupon_applied else None,
         coupon_applied=coupon_applied,
+        rate_plan_code=clean_plan_code,
+        rate_plan_name=plan_name,
+        cancellation_policy=plan_cancellation,
+        meal_plan=plan_meal,
+        occupancy_rate=occupancy_pct,
+        demand_tier=demand_tier,
+        min_los_met=min_los_met,
+        min_los_required=min_los_required,
         subtotal=subtotal,
         tax_amount=tax_amount,
         grand_total=grand_total,
@@ -1106,6 +1206,8 @@ def _create_booking_impl(
             cursor.execute("ALTER TABLE Bookings ADD COLUMN early_checkin_requested INTEGER NOT NULL DEFAULT 0;")
         if "late_checkout_requested" not in b_cols:
             cursor.execute("ALTER TABLE Bookings ADD COLUMN late_checkout_requested INTEGER NOT NULL DEFAULT 0;")
+        if "rate_plan_code" not in b_cols:
+            cursor.execute("ALTER TABLE Bookings ADD COLUMN rate_plan_code TEXT NOT NULL DEFAULT 'BAR';")
     else:
         cursor.execute("ALTER TABLE Bookings ADD COLUMN IF NOT EXISTS coupon_code TEXT DEFAULT NULL;")
         cursor.execute("ALTER TABLE Bookings ADD COLUMN IF NOT EXISTS discount_amount REAL NOT NULL DEFAULT 0.0;")
@@ -1116,10 +1218,11 @@ def _create_booking_impl(
         cursor.execute("ALTER TABLE Bookings ADD COLUMN IF NOT EXISTS guarantee_type TEXT NOT NULL DEFAULT 'Guaranteed';")
         cursor.execute("ALTER TABLE Bookings ADD COLUMN IF NOT EXISTS early_checkin_requested INTEGER NOT NULL DEFAULT 0;")
         cursor.execute("ALTER TABLE Bookings ADD COLUMN IF NOT EXISTS late_checkout_requested INTEGER NOT NULL DEFAULT 0;")
+        cursor.execute("ALTER TABLE Bookings ADD COLUMN IF NOT EXISTS rate_plan_code TEXT NOT NULL DEFAULT 'BAR';")
         b_cols = {
             "coupon_code", "discount_amount", "adults", "children",
             "estimated_arrival_time", "special_requests", "guarantee_type",
-            "early_checkin_requested", "late_checkout_requested"
+            "early_checkin_requested", "late_checkout_requested", "rate_plan_code"
         }
 
     quote = calculate_dynamic_pricing(
@@ -1129,9 +1232,17 @@ def _create_booking_impl(
         guest_id=guest_id,
         amenity_ids=booking_data.amenity_ids,
         coupon_code=booking_data.coupon_code,
+        rate_plan_code=booking_data.rate_plan_code,
         apply_dynamic_pricing=booking_data.apply_dynamic_pricing,
         conn=conn,
     )
+
+    # 5b. Minimum Length of Stay (MLOS) Rate Plan Enforcement
+    if not quote.min_los_met:
+        raise HTTPException(
+            status_code=getattr(status, "HTTP_422_UNPROCESSABLE_CONTENT", 422),
+            detail=f"Rate plan '{quote.rate_plan_name}' ({quote.rate_plan_code}) requires a minimum stay of {quote.min_los_required} nights (requested {quote.nights} nights).",
+        )
 
     if booking_data.apply_dynamic_pricing:
         total_price = quote.grand_total
@@ -1150,7 +1261,35 @@ def _create_booking_impl(
         )
 
     # 6. Insert Booking Record
-    if "adults" in b_cols:
+    if "rate_plan_code" in b_cols:
+        cursor.execute(
+            """
+            INSERT INTO Bookings (
+                guest_id, room_id, check_in_date, check_out_date, total_price, booking_status,
+                coupon_code, discount_amount, adults, children, estimated_arrival_time, special_requests,
+                guarantee_type, early_checkin_requested, late_checkout_requested, rate_plan_code
+            )
+            VALUES (?, ?, ?, ?, ?, 'Confirmed', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+            """,
+            (
+                guest_id,
+                booking_data.room_id,
+                booking_data.check_in_date.isoformat(),
+                booking_data.check_out_date.isoformat(),
+                total_price,
+                applied_coupon,
+                discount_amount,
+                booking_data.adults,
+                booking_data.children,
+                booking_data.estimated_arrival_time or "15:00",
+                booking_data.special_requests or "",
+                booking_data.guarantee_type.value,
+                1 if booking_data.early_checkin_requested else 0,
+                1 if booking_data.late_checkout_requested else 0,
+                quote.rate_plan_code or "BAR",
+            ),
+        )
+    elif "adults" in b_cols:
         cursor.execute(
             """
             INSERT INTO Bookings (
@@ -1231,6 +1370,7 @@ def _create_booking_impl(
             "guest_name": f"{guest_record['first_name']} {guest_record['last_name']}",
             "stay_dates": f"{booking_data.check_in_date} to {booking_data.check_out_date}",
             "total_price": total_price,
+            "rate_plan_code": quote.rate_plan_code or "BAR",
             "coupon_code": applied_coupon,
             "adults": booking_data.adults,
             "children": booking_data.children,
@@ -1256,6 +1396,7 @@ def _create_booking_impl(
         total_price=total_price,
         booking_status=BookingStatus.CONFIRMED,
         created_at=str(booking_created_at),
+        rate_plan_code=quote.rate_plan_code or "BAR",
         coupon_code=applied_coupon,
         discount_amount=discount_amount,
         adults=booking_data.adults,
@@ -1474,6 +1615,13 @@ def get_booking_by_id(booking_id: int, conn: sqlite3.Connection) -> BookingRespo
             cursor.execute("ALTER TABLE Bookings ADD COLUMN early_checkin_requested INTEGER NOT NULL DEFAULT 0;")
         if "late_checkout_requested" not in b_cols:
             cursor.execute("ALTER TABLE Bookings ADD COLUMN late_checkout_requested INTEGER NOT NULL DEFAULT 0;")
+        if "rate_plan_code" not in b_cols:
+            cursor.execute("ALTER TABLE Bookings ADD COLUMN rate_plan_code TEXT NOT NULL DEFAULT 'BAR';")
+    else:
+        try:
+            cursor.execute("ALTER TABLE Bookings ADD COLUMN IF NOT EXISTS rate_plan_code TEXT NOT NULL DEFAULT 'BAR';")
+        except Exception:
+            pass
 
     if not IS_POSTGRES:
         cursor.execute("PRAGMA table_info(Rooms);")
@@ -1587,6 +1735,7 @@ def get_booking_by_id(booking_id: int, conn: sqlite3.Connection) -> BookingRespo
         total_price=float(row["total_price"]),
         booking_status=BookingStatus(row["booking_status"]),
         created_at=str(row["created_at"]) if row["created_at"] else None,
+        rate_plan_code=row["rate_plan_code"] if ("rate_plan_code" in row.keys() and row["rate_plan_code"]) else "BAR",
         coupon_code=row["coupon_code"] if "coupon_code" in row.keys() else None,
         discount_amount=float(row["discount_amount"]) if ("discount_amount" in row.keys() and row["discount_amount"]) else 0.0,
         adults=row["adults"] if ("adults" in row.keys() and row["adults"] is not None) else 1,
@@ -2291,22 +2440,25 @@ def update_guest_profile(
 
 
 # ==========================================
-# Module 11: Pricing & Promotional Coupon Endpoints
+# Module 3 & 11: Rates, Dynamic Pricing & Promotional Yield Management Endpoints
 # ==========================================
 
 @app.post(
     "/api/pricing/quote",
     response_model=PriceQuoteResponse,
     summary="Get detailed dynamic pricing quotation with surges and discounts",
-    tags=["Pricing & Coupons"],
+    tags=["Pricing & Yield Management"],
 )
+@app.post("/pricing/quote", response_model=PriceQuoteResponse, include_in_schema=False)
+@app.post("/api/rates/quote", response_model=PriceQuoteResponse, tags=["Pricing & Yield Management"])
+@app.post("/rates/quote", response_model=PriceQuoteResponse, include_in_schema=False)
 def get_pricing_quote(
     request: PriceQuoteRequest,
     conn: sqlite3.Connection = Depends(get_db),
 ):
     """
-    Returns an itemized price quotation for a target room, stay dates, guest loyalty, and coupon.
-    Includes day-of-week breakdown (weekend surge, summer surge), length-of-stay discount, and VIP tier benefits.
+    Returns an itemized price quotation for a target room, stay dates, guest loyalty, coupon, and rate plan.
+    Includes day-of-week breakdown (weekend surge, summer surge), occupancy demand surge, length-of-stay discount, and VIP tier benefits.
     """
     if request.check_out_date <= request.check_in_date:
         raise HTTPException(
@@ -2333,8 +2485,134 @@ def get_pricing_quote(
         guest_id=request.guest_id,
         amenity_ids=request.amenity_ids,
         coupon_code=request.coupon_code,
+        rate_plan_code=request.rate_plan_code,
         apply_dynamic_pricing=True,
         conn=conn,
+    )
+
+
+@app.get(
+    "/api/rates/plans",
+    response_model=List[RatePlanResponse],
+    summary="List all available rate plans and cancellation policies",
+    tags=["Pricing & Yield Management"],
+)
+@app.get("/rates/plans", response_model=List[RatePlanResponse], include_in_schema=False)
+def get_rate_plans(
+    active_only: bool = Query(True, description="Filter for currently active rate plans only"),
+    conn: sqlite3.Connection = Depends(get_db),
+):
+    """Retrieves all rate plans with their pricing multipliers, meal plans, cancellation policies, and MLOS rules."""
+    cursor = conn.cursor()
+    has_table = True
+    if not IS_POSTGRES:
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='RatePlans';")
+        has_table = bool(cursor.fetchone())
+    if not has_table:
+        return []
+
+    query = "SELECT * FROM RatePlans"
+    params = []
+    if active_only:
+        query += " WHERE is_active = 1"
+    query += " ORDER BY rate_multiplier ASC;"
+    cursor.execute(query, params)
+    rows = cursor.fetchall()
+
+    plans = []
+    for r in rows:
+        plans.append(
+            RatePlanResponse(
+                id=r["id"],
+                code=r["code"],
+                name=r["name"],
+                description=r["description"] if "description" in r.keys() else "",
+                rate_multiplier=float(r["rate_multiplier"]),
+                cancellation_policy=CancellationPolicy(r["cancellation_policy"]),
+                meal_plan=MealPlanType(r["meal_plan"]),
+                min_los=int(r["min_los"]) if "min_los" in r.keys() else 1,
+                is_active=bool(r["is_active"]),
+                created_at=str(r["created_at"]) if r["created_at"] else None,
+            )
+        )
+    return plans
+
+
+@app.post(
+    "/api/rates/plans",
+    response_model=RatePlanResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create a custom rate plan",
+    tags=["Pricing & Yield Management"],
+)
+@app.post("/rates/plans", response_model=RatePlanResponse, status_code=status.HTTP_201_CREATED, include_in_schema=False)
+def create_rate_plan(
+    plan_data: RatePlanCreate,
+    conn: sqlite3.Connection = Depends(get_db),
+):
+    """Creates a new rate plan with specific rate multiplier, cancellation terms, meal inclusions, and MLOS restrictions."""
+    cursor = conn.cursor()
+    clean_code = plan_data.code.strip().upper()
+    cursor.execute("SELECT id FROM RatePlans WHERE UPPER(code) = ?;", (clean_code,))
+    if cursor.fetchone():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Rate plan code '{clean_code}' already exists.",
+        )
+
+    cursor.execute(
+        """
+        INSERT INTO RatePlans (code, name, description, rate_multiplier, cancellation_policy, meal_plan, min_los, is_active)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+        """,
+        (
+            clean_code,
+            plan_data.name.strip(),
+            plan_data.description or "",
+            plan_data.rate_multiplier,
+            plan_data.cancellation_policy.value,
+            plan_data.meal_plan.value,
+            plan_data.min_los,
+            1 if plan_data.is_active else 0,
+        ),
+    )
+    plan_id = cursor.lastrowid
+    if not plan_id:
+        cursor.execute("SELECT id FROM RatePlans WHERE UPPER(code) = ?;", (clean_code,))
+        p_row = cursor.fetchone()
+        plan_id = p_row["id"] if p_row else None
+
+    # Audit log
+    record_audit_log(
+        conn,
+        action="RATE_PLAN_CREATED",
+        entity_type="RatePlan",
+        entity_id=plan_id,
+        details={
+            "code": clean_code,
+            "name": plan_data.name,
+            "rate_multiplier": plan_data.rate_multiplier,
+            "cancellation_policy": plan_data.cancellation_policy.value,
+            "meal_plan": plan_data.meal_plan.value,
+            "min_los": plan_data.min_los,
+        },
+        actor="Revenue Manager",
+    )
+
+    conn.commit()
+    cursor.execute("SELECT * FROM RatePlans WHERE id = ?;", (plan_id,))
+    row = cursor.fetchone()
+    return RatePlanResponse(
+        id=row["id"],
+        code=row["code"],
+        name=row["name"],
+        description=row["description"],
+        rate_multiplier=float(row["rate_multiplier"]),
+        cancellation_policy=CancellationPolicy(row["cancellation_policy"]),
+        meal_plan=MealPlanType(row["meal_plan"]),
+        min_los=int(row["min_los"]),
+        is_active=bool(row["is_active"]),
+        created_at=str(row["created_at"]) if row["created_at"] else None,
     )
 
 

@@ -217,6 +217,7 @@ class BookingBase(BaseModel):
     guarantee_type: GuaranteeType = Field(default=GuaranteeType.GUARANTEED, description="Reservation guarantee status")
     early_checkin_requested: bool = Field(default=False, description="Early check-in priority flag")
     late_checkout_requested: bool = Field(default=False, description="Late check-out request flag")
+    rate_plan_code: str = Field(default="BAR", description="Associated rate plan code (e.g. BAR, NON_REF, BB_PACKAGE)")
 
 
 class BookingCreate(BookingBase):
@@ -278,6 +279,7 @@ class BookingResponse(BaseModel):
     guarantee_type: GuaranteeType = GuaranteeType.GUARANTEED
     early_checkin_requested: bool = False
     late_checkout_requested: bool = False
+    rate_plan_code: str = "BAR"
     room: Optional[RoomResponse] = None
     guest: Optional[GuestResponse] = None
     amenities: list[AmenityResponse] = Field(default_factory=list, description="Attached add-on amenities")
@@ -445,6 +447,54 @@ class CouponValidateResponse(BaseModel):
     message: str
 
 
+# ==========================================
+# Module 3: Rate Plans & Yield Management Schemas
+# ==========================================
+
+class CancellationPolicy(str, Enum):
+    """Cancellation terms for a rate plan."""
+    FLEXIBLE = "Flexible (24h free cancellation)"
+    MODERATE = "Moderate (48h cancellation)"
+    NON_REFUNDABLE = "Non-Refundable (100% deposit locked)"
+
+
+class MealPlanType(str, Enum):
+    """Meal package options bundled into rate plans."""
+    ROOM_ONLY = "Room Only"
+    CONTINENTAL_BREAKFAST = "Continental Breakfast Included"
+    FULL_BOARD = "Full Board (All Meals)"
+
+
+class DemandYieldTier(str, Enum):
+    """Dynamic yield management demand classification."""
+    LOW_DEMAND = "Low Demand (Discounted Stimulus)"
+    NORMAL_DEMAND = "Standard Demand"
+    HIGH_DEMAND = "High Demand Surge (+15%)"
+    PEAK_COMPRESSION = "Peak Compression Surge (+30%)"
+
+
+class RatePlanBase(BaseModel):
+    """Core rate plan configuration contract."""
+    code: str = Field(..., max_length=30, description="Unique code (e.g. BAR, NON_REF, BB_PACKAGE)")
+    name: str = Field(..., max_length=100, description="Display name")
+    description: Optional[str] = Field(default="", description="Package terms and guest benefits")
+    rate_multiplier: float = Field(default=1.0, gt=0, le=3.0, description="Base rate multiplier")
+    cancellation_policy: CancellationPolicy = Field(default=CancellationPolicy.FLEXIBLE)
+    meal_plan: MealPlanType = Field(default=MealPlanType.ROOM_ONLY)
+    min_los: int = Field(default=1, ge=1, description="Minimum length of stay in nights")
+    is_active: bool = Field(default=True)
+
+
+class RatePlanCreate(RatePlanBase):
+    pass
+
+
+class RatePlanResponse(RatePlanBase):
+    id: int
+    created_at: Optional[str | datetime] = None
+    model_config = ConfigDict(from_attributes=True)
+
+
 class NightlyRateDetail(BaseModel):
     """Breakdown of dynamic pricing per night of stay."""
     stay_date: date
@@ -454,6 +504,8 @@ class NightlyRateDetail(BaseModel):
     weekend_surge: float = 0.0
     is_summer: bool
     summer_surge: float = 0.0
+    demand_yield_surge: float = 0.0
+    rate_plan_multiplier: float = 1.0
     effective_rate: float
 
 
@@ -463,6 +515,7 @@ class PriceQuoteRequest(BaseModel):
     check_in_date: date
     check_out_date: date
     guest_id: Optional[int] = None
+    rate_plan_code: Optional[str] = Field(default="BAR", description="Rate plan code")
     amenity_ids: list[int] = Field(default_factory=list)
     coupon_code: Optional[str] = None
 
@@ -477,6 +530,8 @@ class PriceQuoteResponse(BaseModel):
     raw_room_total: float
     weekend_surge_total: float
     seasonal_surge_total: float
+    occupancy_surge_total: float = 0.0
+    rate_plan_adjustment: float = 0.0
     length_of_stay_discount: float
     vip_discount: float
     net_room_charge: float
@@ -484,6 +539,14 @@ class PriceQuoteResponse(BaseModel):
     coupon_discount: float
     coupon_code: Optional[str] = None
     coupon_applied: bool = False
+    rate_plan_code: str = "BAR"
+    rate_plan_name: str = "Best Available Rate"
+    cancellation_policy: str = "Flexible (24h free cancellation)"
+    meal_plan: str = "Room Only"
+    occupancy_rate: float = 0.0
+    demand_tier: DemandYieldTier = DemandYieldTier.NORMAL_DEMAND
+    min_los_met: bool = True
+    min_los_required: int = 1
     subtotal: float
     tax_amount: float
     grand_total: float

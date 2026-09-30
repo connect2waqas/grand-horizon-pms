@@ -103,6 +103,23 @@ ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS special_requests TEXT DEFAU
 ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS guarantee_type VARCHAR(30) NOT NULL DEFAULT 'Guaranteed';
 ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS early_checkin_requested BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS late_checkout_requested BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS rate_plan_code VARCHAR(30) NOT NULL DEFAULT 'BAR';
+
+-- ------------------------------------------------------------------------------
+-- 5b. Table: rateplans (Module 3: Enterprise Rate Plans & Dynamic Yield Controls)
+-- ------------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.rateplans (
+    id SERIAL PRIMARY KEY,
+    code VARCHAR(30) UNIQUE NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    description TEXT DEFAULT '',
+    rate_multiplier NUMERIC NOT NULL DEFAULT 1.0 CHECK (rate_multiplier > 0),
+    cancellation_policy VARCHAR(100) NOT NULL DEFAULT 'Flexible (24h free cancellation)',
+    meal_plan VARCHAR(100) NOT NULL DEFAULT 'Room Only',
+    min_los INTEGER NOT NULL DEFAULT 1 CHECK (min_los >= 1),
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
 
 -- ------------------------------------------------------------------------------
 -- 6. Table: bookingamenities (Many-to-Many Junction for Pre-Booked Amenities)
@@ -222,3 +239,11 @@ ON CONFLICT (code) DO NOTHING;
 -- 4. Initial Bootstrap Audit Event
 INSERT INTO public.auditlogs (action, entity_type, entity_id, actor, details) VALUES
 ('SYSTEM_MIGRATED', 'System', 1, 'DevOps Lead', '{"database": "Supabase PostgreSQL", "environment": "Production"}');
+
+-- 5. Rate Plans Catalog (Module 3)
+INSERT INTO public.rateplans (code, name, description, rate_multiplier, cancellation_policy, meal_plan, min_los, is_active) VALUES
+('BAR', 'Best Available Rate', 'Standard fully flexible rate with 24-hour cancellation flexibility.', 1.0, 'Flexible (24h free cancellation)', 'Room Only', 1, TRUE),
+('NON_REF', 'Non-Refundable Saver', 'Advance purchase saver plan with guaranteed 15% discount. 100% non-refundable.', 0.85, 'Non-Refundable (100% deposit locked)', 'Room Only', 1, TRUE),
+('BB_PACKAGE', 'Bed & Breakfast Package', 'Includes gourmet daily continental breakfast buffet for all guests.', 1.15, 'Flexible (24h free cancellation)', 'Continental Breakfast Included', 1, TRUE),
+('CORP_EXTENDED', 'Extended Stay & Corporate', 'Long-stay executive preferred partner pricing with 20% discount. Minimum 3 nights required.', 0.80, 'Moderate (48h cancellation)', 'Room Only', 3, TRUE)
+ON CONFLICT (code) DO NOTHING;

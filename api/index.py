@@ -1479,7 +1479,22 @@ def get_booking_by_id(booking_id: int, conn: sqlite3.Connection) -> BookingRespo
         cursor.execute("PRAGMA table_info(Rooms);")
         r_cols = {r[1] for r in cursor.fetchall()}
     else:
-        r_cols = {"floor", "max_occupancy", "bed_type", "view_type", "sq_meters", "is_smoking", "cleanliness_status", "lock_reason"}
+        try:
+            cursor.execute("ALTER TABLE Rooms ADD COLUMN IF NOT EXISTS floor INTEGER NOT NULL DEFAULT 1;")
+            cursor.execute("ALTER TABLE Rooms ADD COLUMN IF NOT EXISTS max_occupancy INTEGER NOT NULL DEFAULT 2;")
+            cursor.execute("ALTER TABLE Rooms ADD COLUMN IF NOT EXISTS bed_type TEXT NOT NULL DEFAULT '1 King Bed';")
+            cursor.execute("ALTER TABLE Rooms ADD COLUMN IF NOT EXISTS view_type TEXT NOT NULL DEFAULT 'City Skyline';")
+            cursor.execute("ALTER TABLE Rooms ADD COLUMN IF NOT EXISTS sq_meters INTEGER NOT NULL DEFAULT 35;")
+            cursor.execute("ALTER TABLE Rooms ADD COLUMN IF NOT EXISTS is_smoking INTEGER NOT NULL DEFAULT 0;")
+            cursor.execute("ALTER TABLE Rooms ADD COLUMN IF NOT EXISTS cleanliness_status TEXT NOT NULL DEFAULT 'Inspected';")
+            cursor.execute("ALTER TABLE Rooms ADD COLUMN IF NOT EXISTS lock_reason TEXT DEFAULT NULL;")
+        except Exception:
+            pass
+        try:
+            cursor.execute("SELECT column_name FROM information_schema.columns WHERE lower(table_name) = 'rooms';")
+            r_cols = {r["column_name"] if isinstance(r, dict) or hasattr(r, "keys") else r[0] for r in cursor.fetchall()}
+        except Exception:
+            r_cols = set()
 
     extra_room_fields = []
     for c in ["floor", "max_occupancy", "bed_type", "view_type", "sq_meters", "is_smoking", "cleanliness_status", "lock_reason"]:

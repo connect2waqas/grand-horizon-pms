@@ -293,6 +293,15 @@ def init_db() -> None:
             cursor.execute("ALTER TABLE Rooms ADD COLUMN cleanliness_status TEXT NOT NULL DEFAULT 'Inspected';")
         if "lock_reason" not in existing_room_cols:
             cursor.execute("ALTER TABLE Rooms ADD COLUMN lock_reason TEXT DEFAULT NULL;")
+    else:
+        cursor.execute("ALTER TABLE Rooms ADD COLUMN IF NOT EXISTS floor INTEGER NOT NULL DEFAULT 1;")
+        cursor.execute("ALTER TABLE Rooms ADD COLUMN IF NOT EXISTS max_occupancy INTEGER NOT NULL DEFAULT 2;")
+        cursor.execute("ALTER TABLE Rooms ADD COLUMN IF NOT EXISTS bed_type TEXT NOT NULL DEFAULT '1 King Bed';")
+        cursor.execute("ALTER TABLE Rooms ADD COLUMN IF NOT EXISTS view_type TEXT NOT NULL DEFAULT 'City Skyline';")
+        cursor.execute("ALTER TABLE Rooms ADD COLUMN IF NOT EXISTS sq_meters INTEGER NOT NULL DEFAULT 35;")
+        cursor.execute("ALTER TABLE Rooms ADD COLUMN IF NOT EXISTS is_smoking INTEGER NOT NULL DEFAULT 0;")
+        cursor.execute("ALTER TABLE Rooms ADD COLUMN IF NOT EXISTS cleanliness_status TEXT NOT NULL DEFAULT 'Inspected';")
+        cursor.execute("ALTER TABLE Rooms ADD COLUMN IF NOT EXISTS lock_reason TEXT DEFAULT NULL;")
 
     # Table 3: Bookings (Foreign Keys with referential integrity; checkout after checkin constraint)
     cursor.execute("""

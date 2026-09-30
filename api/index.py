@@ -1107,6 +1107,15 @@ def _create_booking_impl(
         if "late_checkout_requested" not in b_cols:
             cursor.execute("ALTER TABLE Bookings ADD COLUMN late_checkout_requested INTEGER NOT NULL DEFAULT 0;")
     else:
+        cursor.execute("ALTER TABLE Bookings ADD COLUMN IF NOT EXISTS coupon_code TEXT DEFAULT NULL;")
+        cursor.execute("ALTER TABLE Bookings ADD COLUMN IF NOT EXISTS discount_amount REAL NOT NULL DEFAULT 0.0;")
+        cursor.execute("ALTER TABLE Bookings ADD COLUMN IF NOT EXISTS adults INTEGER NOT NULL DEFAULT 1;")
+        cursor.execute("ALTER TABLE Bookings ADD COLUMN IF NOT EXISTS children INTEGER NOT NULL DEFAULT 0;")
+        cursor.execute("ALTER TABLE Bookings ADD COLUMN IF NOT EXISTS estimated_arrival_time TEXT DEFAULT '15:00';")
+        cursor.execute("ALTER TABLE Bookings ADD COLUMN IF NOT EXISTS special_requests TEXT DEFAULT '';")
+        cursor.execute("ALTER TABLE Bookings ADD COLUMN IF NOT EXISTS guarantee_type TEXT NOT NULL DEFAULT 'Guaranteed';")
+        cursor.execute("ALTER TABLE Bookings ADD COLUMN IF NOT EXISTS early_checkin_requested INTEGER NOT NULL DEFAULT 0;")
+        cursor.execute("ALTER TABLE Bookings ADD COLUMN IF NOT EXISTS late_checkout_requested INTEGER NOT NULL DEFAULT 0;")
         b_cols = {
             "coupon_code", "discount_amount", "adults", "children",
             "estimated_arrival_time", "special_requests", "guarantee_type",

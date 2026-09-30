@@ -128,14 +128,14 @@ class PostgresCursorWrapper:
         if is_insert and "RETURNING" not in query.upper() and not is_booking_amenities:
             trimmed = query.rstrip().rstrip(";")
             returning_query = f"{trimmed} RETURNING id;"
+            self._cursor.execute(returning_query, params)
             try:
-                self._cursor.execute(returning_query, params)
                 row = self._cursor.fetchone()
                 if row and "id" in row:
                     self.lastrowid = row["id"]
-                return self
             except Exception:
                 pass
+            return self
 
         self._cursor.execute(query, params)
         return self
@@ -342,6 +342,16 @@ def init_db() -> None:
             cursor.execute("ALTER TABLE Bookings ADD COLUMN early_checkin_requested INTEGER NOT NULL DEFAULT 0;")
         if "late_checkout_requested" not in existing_booking_cols:
             cursor.execute("ALTER TABLE Bookings ADD COLUMN late_checkout_requested INTEGER NOT NULL DEFAULT 0;")
+    else:
+        cursor.execute("ALTER TABLE Bookings ADD COLUMN IF NOT EXISTS coupon_code TEXT DEFAULT NULL;")
+        cursor.execute("ALTER TABLE Bookings ADD COLUMN IF NOT EXISTS discount_amount REAL NOT NULL DEFAULT 0.0;")
+        cursor.execute("ALTER TABLE Bookings ADD COLUMN IF NOT EXISTS adults INTEGER NOT NULL DEFAULT 1;")
+        cursor.execute("ALTER TABLE Bookings ADD COLUMN IF NOT EXISTS children INTEGER NOT NULL DEFAULT 0;")
+        cursor.execute("ALTER TABLE Bookings ADD COLUMN IF NOT EXISTS estimated_arrival_time TEXT DEFAULT '15:00';")
+        cursor.execute("ALTER TABLE Bookings ADD COLUMN IF NOT EXISTS special_requests TEXT DEFAULT '';")
+        cursor.execute("ALTER TABLE Bookings ADD COLUMN IF NOT EXISTS guarantee_type TEXT NOT NULL DEFAULT 'Guaranteed';")
+        cursor.execute("ALTER TABLE Bookings ADD COLUMN IF NOT EXISTS early_checkin_requested INTEGER NOT NULL DEFAULT 0;")
+        cursor.execute("ALTER TABLE Bookings ADD COLUMN IF NOT EXISTS late_checkout_requested INTEGER NOT NULL DEFAULT 0;")
 
     # Table 4: Amenities (Catalog of bookable hotel add-ons)
     cursor.execute("""

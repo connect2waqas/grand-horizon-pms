@@ -22,7 +22,7 @@ def test_create_booking_with_deepened_reservation_fields(client):
     # Ensure Room 1 is available
     client.patch("/rooms/1/status", json={"status": "Available"})
 
-    offset = random.randint(1500, 3500)
+    offset = random.randint(20000, 60000)
     check_in = (date.today() + timedelta(days=offset)).isoformat()
     check_out = (date.today() + timedelta(days=offset + 3)).isoformat()
 

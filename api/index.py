@@ -5658,7 +5658,11 @@ def get_finance_dashboard(conn: sqlite3.Connection = Depends(get_db)):
 # ==============================================================================
 
 def ensure_room_operations_tables(conn: sqlite3.Connection):
-    """Guarantees RoomLockouts and RoomMoves tables exist in SQLite / PostgreSQL."""
+    """Guarantees RoomLockouts and RoomMoves tables exist in SQLite / PostgreSQL.
+    On Postgres (production), these tables are created by supabase_migration.sql — skip DDL entirely.
+    """
+    if IS_POSTGRES:
+        return  # Tables already exist via Supabase migration — no DDL needed
     cursor = conn.cursor()
     if not IS_POSTGRES:
         cursor.execute("""

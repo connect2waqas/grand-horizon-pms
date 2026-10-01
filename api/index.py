@@ -4923,7 +4923,7 @@ def tap_door_lock(
             payload.room_id,
             reader_loc,
             event_type.value,
-            1 if access_granted else 0,
+            bool(access_granted),
             now_iso,
         ),
     )
@@ -4968,6 +4968,7 @@ def get_access_logs(
     room_id: Optional[int] = Query(None, description="Filter by room ID"),
     card_uid: Optional[str] = Query(None, description="Filter by card UID"),
     event_type: Optional[str] = Query(None, description="Filter by event outcome (e.g. Granted, Denied)"),
+    access_granted: Optional[bool] = Query(None, description="Filter by boolean access outcome"),
     limit: int = Query(50, ge=1, le=500, description="Max logs to return"),
     conn: sqlite3.Connection = Depends(get_db),
 ):
@@ -4987,6 +4988,11 @@ def get_access_logs(
     if event_type:
         conditions.append("a.event_type LIKE ?")
         params.append(f"%{event_type.strip()}%")
+    if access_granted is not None:
+        if access_granted:
+            conditions.append("a.access_granted = TRUE")
+        else:
+            conditions.append("NOT a.access_granted")
 
     where_clause = (" WHERE " + " AND ".join(conditions)) if conditions else ""
     query = f"""
@@ -5037,11 +5043,11 @@ def get_access_control_dashboard(conn: sqlite3.Connection = Depends(get_db)):
     row = cursor.fetchone()
     total_access_taps_today = int(row["cnt"] if isinstance(row, dict) and "cnt" in row else (row[0] if row else 0))
 
-    cursor.execute("SELECT COUNT(*) as cnt FROM AccessLogs WHERE access_granted = 1 OR access_granted IS TRUE;")
+    cursor.execute("SELECT COUNT(*) as cnt FROM AccessLogs WHERE access_granted = TRUE;")
     row = cursor.fetchone()
     granted_taps_today = int(row["cnt"] if isinstance(row, dict) and "cnt" in row else (row[0] if row else 0))
 
-    cursor.execute("SELECT COUNT(*) as cnt FROM AccessLogs WHERE access_granted = 0 OR access_granted IS FALSE;")
+    cursor.execute("SELECT COUNT(*) as cnt FROM AccessLogs WHERE NOT access_granted;")
     row = cursor.fetchone()
     denied_intrusions_today = int(row["cnt"] if isinstance(row, dict) and "cnt" in row else (row[0] if row else 0))
 
@@ -5052,7 +5058,7 @@ def get_access_control_dashboard(conn: sqlite3.Connection = Depends(get_db)):
         FROM AccessLogs a
         LEFT JOIN Rooms r ON a.room_id = r.id
         LEFT JOIN Keycards k ON a.card_uid = k.card_uid
-        WHERE a.access_granted = 0 OR a.access_granted IS FALSE
+        WHERE NOT a.access_granted
         ORDER BY a.id DESC
         LIMIT 5;
         """

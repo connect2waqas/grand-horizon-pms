@@ -5816,7 +5816,7 @@ def declare_room_lockout(
         )
 
     cursor.execute(
-        "SELECT id FROM roomlockouts WHERE room_id = ? AND (is_active = TRUE OR is_active = 1);",
+        "SELECT id FROM roomlockouts WHERE room_id = ? AND is_active = TRUE;",
         (room_id,),
     )
     active_existing = cursor.fetchone()
@@ -5909,7 +5909,7 @@ def release_room_lockout(
         )
 
     cursor.execute(
-        "SELECT * FROM roomlockouts WHERE room_id = ? AND (is_active = TRUE OR is_active = 1) ORDER BY id DESC LIMIT 1;",
+        "SELECT * FROM roomlockouts WHERE room_id = ? AND is_active = TRUE ORDER BY id DESC LIMIT 1;",
         (room_id,),
     )
     lockout = cursor.fetchone()
@@ -6251,7 +6251,7 @@ def get_room_operations_dashboard(conn: sqlite3.Connection = Depends(get_db)):
         SELECT l.*, r.room_number, r.room_type
         FROM roomlockouts l
         JOIN Rooms r ON l.room_id = r.id
-        WHERE (l.is_active = TRUE OR l.is_active = 1)
+        WHERE l.is_active = TRUE
         ORDER BY l.id DESC;
         """
     )

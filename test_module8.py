@@ -78,6 +78,9 @@ def test_adr_and_revpar_calculation(client):
 
 def test_kpi_engine_reacts_dynamically_to_room_status_mutations(client):
     """Verify that room turnover directly updates Occupancy, ADR, and RevPAR in real time."""
+    # 0. Ensure clean baseline
+    client.patch("/rooms/1/status", json={"status": "Available"})
+
     # 1. Get baseline
     base_kpi = client.get("/analytics/kpis").json()
     base_occupied = base_kpi["occupied_rooms"]
@@ -103,6 +106,7 @@ def test_kpi_engine_reacts_dynamically_to_room_status_mutations(client):
 
 def test_maintenance_room_adjusts_active_inventory(client):
     """Verify that setting a room to Maintenance deducts from active rooms and recalculates occupancy denominator."""
+    client.patch("/rooms/2/status", json={"status": "Available"})
     base_kpi = client.get("/analytics/kpis").json()
     base_active = base_kpi["active_rooms"]
     base_maint = base_kpi["maintenance_rooms"]

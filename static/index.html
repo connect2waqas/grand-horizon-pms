@@ -83,6 +83,10 @@
           Forex & Taxes
         </button>
 
+        <button id="btnOpenRoomOpsModal" class="btn btn-secondary" style="font-size: 11.5px; padding: 5px 10px;" title="View Room Operations Cockpit & Out-of-Order Registry">
+          Room Ops (OOO & Moves)
+        </button>
+
         <span class="status-badge" id="apiStatusBadge">
           <span class="status-dot"></span>
           <span>FastAPI Connected</span>
@@ -1570,6 +1574,295 @@
     </div>
   </div>
 
+  <!-- Module 7 Modal 1: Room Operations & Out-of-Order Cockpit -->
+  <div id="roomOpsModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+    <div class="modal-card" style="max-width: 900px; width: 95%;">
+      <div class="modal-header">
+        <div class="modal-icon-badge" style="background: rgba(239, 68, 68, 0.15); color: #f87171;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+          </svg>
+        </div>
+        <h3 class="modal-title">Room Operations & Out-of-Order Cockpit</h3>
+        <p class="modal-subtitle">Real-time status breakdown, physical room lockouts, and emergency relocations</p>
+      </div>
+
+      <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+        <!-- KPI Row -->
+        <div class="room-ops-kpi-grid">
+          <div class="room-ops-kpi-item">
+            <div class="room-ops-kpi-label">Total Rooms</div>
+            <div id="opsKpiTotal" class="room-ops-kpi-val">—</div>
+          </div>
+          <div class="room-ops-kpi-item">
+            <div class="room-ops-kpi-label" style="color: #6ee7b7;">Available</div>
+            <div id="opsKpiAvail" class="room-ops-kpi-val" style="color: #6ee7b7;">—</div>
+          </div>
+          <div class="room-ops-kpi-item">
+            <div class="room-ops-kpi-label" style="color: #93c5fd;">Occupied</div>
+            <div id="opsKpiOcc" class="room-ops-kpi-val" style="color: #93c5fd;">—</div>
+          </div>
+          <div class="room-ops-kpi-item">
+            <div class="room-ops-kpi-label" style="color: #fde047;">Cleaning</div>
+            <div id="opsKpiClean" class="room-ops-kpi-val" style="color: #fde047;">—</div>
+          </div>
+          <div class="room-ops-kpi-item">
+            <div class="room-ops-kpi-label" style="color: #f87171;">Out of Order</div>
+            <div id="opsKpiOoo" class="room-ops-kpi-val" style="color: #f87171;">—</div>
+          </div>
+          <div class="room-ops-kpi-item">
+            <div class="room-ops-kpi-label" style="color: #fbbf24;">Out of Service</div>
+            <div id="opsKpiOos" class="room-ops-kpi-val" style="color: #fbbf24;">—</div>
+          </div>
+        </div>
+
+        <!-- Section: Active Lockouts Registry -->
+        <div style="margin-bottom: 24px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <h4 style="margin: 0; font-size: 13px; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.04em;">
+              Active Defect Lockouts (OOO / OOS)
+            </h4>
+            <button type="button" id="btnOpenDeclareLockoutQuick" class="btn btn-secondary" style="font-size: 11px; padding: 4px 10px;">
+              + Declare New Lockout
+            </button>
+          </div>
+          <table class="reservations-table" style="font-size: 12px; margin-bottom: 8px;">
+            <thead>
+              <tr>
+                <th>Room</th>
+                <th>Type</th>
+                <th>Reason / Defect</th>
+                <th>Assigned Trade</th>
+                <th>Expected Back</th>
+                <th>Authorized By</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="activeLockoutsTableBody">
+              <tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 16px;">Loading lockouts...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Section: Recent Emergency Relocations -->
+        <div>
+          <h4 style="margin: 0 0 8px; font-size: 13px; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.04em;">
+            Recent In-House Guest Relocations
+          </h4>
+          <table class="reservations-table" style="font-size: 12px;">
+            <thead>
+              <tr>
+                <th>Booking #</th>
+                <th>Guest</th>
+                <th>From → To</th>
+                <th>Reason</th>
+                <th>Relocated By</th>
+                <th>Keycards Re-encoded</th>
+                <th>Date / Time</th>
+              </tr>
+            </thead>
+            <tbody id="recentRoomMovesTableBody">
+              <tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 16px;">Loading relocation history...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" id="btnCloseRoomOpsModal" class="btn btn-secondary">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Module 7 Modal 2: Declare Room Lockout Modal -->
+  <div id="roomLockoutModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+    <div class="modal-card" style="max-width: 540px;">
+      <div class="modal-header">
+        <div class="modal-icon-badge" style="background: rgba(239, 68, 68, 0.15); color: #f87171;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+          </svg>
+        </div>
+        <h3 class="modal-title">Decommission Room (Lockout)</h3>
+        <p class="modal-subtitle">Take physical room out of order for facilities repairs</p>
+      </div>
+
+      <form id="roomLockoutForm">
+        <div class="modal-body">
+          <div class="form-control">
+            <label for="lockoutRoomSelect">Target Room <span class="required">*</span></label>
+            <select id="lockoutRoomSelect" required>
+              <option value="">Select Room...</option>
+            </select>
+          </div>
+
+          <div class="form-grid-2">
+            <div class="form-control">
+              <label for="lockoutType">Lockout Severity</label>
+              <select id="lockoutType" required>
+                <option value="Out_of_Order">Out of Order (OOO - Deduct from active)</option>
+                <option value="Out_of_Service">Out of Service (OOS - Minor touchup)</option>
+                <option value="Emergency_Repair">Emergency Repair (Immediate containment)</option>
+              </select>
+            </div>
+            <div class="form-control">
+              <label for="lockoutTrade">Assigned Trade</label>
+              <select id="lockoutTrade" required>
+                <option value="General Maintenance">General Maintenance</option>
+                <option value="HVAC Mechanicals">HVAC Mechanicals</option>
+                <option value="Plumbing Specialists">Plumbing Specialists</option>
+                <option value="Electrical & Power">Electrical & Power</option>
+                <option value="Carpentry & Glazing">Carpentry & Glazing</option>
+                <option value="Sanitization & Ozone">Sanitization & Ozone</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-control">
+            <label for="lockoutReason">Defect Description / Reason <span class="required">*</span></label>
+            <input type="text" id="lockoutReason" placeholder="e.g. Master bathroom primary pipe fracture" required>
+          </div>
+
+          <div class="form-grid-2">
+            <div class="form-control">
+              <label for="lockoutAuthorizedBy">Authorized By</label>
+              <input type="text" id="lockoutAuthorizedBy" value="Duty Manager" required>
+            </div>
+            <div class="form-control">
+              <label for="lockoutExpectedCompletion">Expected Ready Date</label>
+              <input type="date" id="lockoutExpectedCompletion">
+            </div>
+          </div>
+
+          <div class="form-control">
+            <label for="lockoutNotes">Facilities Instructions & Parts</label>
+            <textarea id="lockoutNotes" rows="2" placeholder="Parts requisitioned, vendor ticket reference, etc."></textarea>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" id="btnCancelRoomLockoutModal" class="btn btn-secondary">Cancel</button>
+          <button type="submit" id="btnSubmitRoomLockout" class="btn btn-primary" style="background: #ef4444; border-color: #ef4444;">Lock Out Room</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Module 7 Modal 3: Release Room Lockout Modal -->
+  <div id="roomReleaseModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+    <div class="modal-card" style="max-width: 500px;">
+      <div class="modal-header">
+        <div class="modal-icon-badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+        </div>
+        <h3 class="modal-title">Release Room to Turnover</h3>
+        <p class="modal-subtitle">Certify completion of physical repairs and return to cleaning</p>
+      </div>
+
+      <form id="roomReleaseForm">
+        <input type="hidden" id="releaseRoomId">
+        <div class="modal-body">
+          <div class="form-control">
+            <label>Releasing Room</label>
+            <input type="text" id="releaseRoomDisplay" readonly style="background: var(--canvas-bg); color: var(--text-muted);">
+          </div>
+
+          <div class="form-grid-2">
+            <div class="form-control">
+              <label for="releaseCertifiedBy">Inspector / Sign-off <span class="required">*</span></label>
+              <input type="text" id="releaseCertifiedBy" value="Facilities Supervisor" required>
+            </div>
+            <div class="form-control">
+              <label for="releaseCleanliness">Turnover Cleanliness</label>
+              <select id="releaseCleanliness" required>
+                <option value="Touch-up Required">Touch-up Required</option>
+                <option value="Dirty">Dirty (Full Turnover Clean)</option>
+                <option value="Clean">Clean (Ready for Inspection)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-control">
+            <label for="releaseNotes">Resolution Certification Notes <span class="required">*</span></label>
+            <textarea id="releaseNotes" rows="3" placeholder="Describe physical fix certified and testing performed..." required></textarea>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" id="btnCancelRoomReleaseModal" class="btn btn-secondary">Cancel</button>
+          <button type="submit" id="btnSubmitRoomRelease" class="btn btn-primary" style="background: #10b981; border-color: #10b981;">Certify & Release Room</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Module 7 Modal 4: Emergency Guest Room Move Modal -->
+  <div id="roomMoveModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+    <div class="modal-card" style="max-width: 560px;">
+      <div class="modal-header">
+        <div class="modal-icon-badge" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+            <circle cx="8.5" cy="7" r="4"></circle>
+            <polyline points="17 11 19 13 23 9"></polyline>
+          </svg>
+        </div>
+        <h3 class="modal-title">Emergency Guest Room Relocation</h3>
+        <p class="modal-subtitle">Transfer in-house checked-in guest to an available clean room</p>
+      </div>
+
+      <form id="roomMoveForm">
+        <input type="hidden" id="moveBookingId">
+        <div class="modal-body">
+          <div style="background: var(--canvas-bg); padding: 12px; border-radius: var(--radius-md); border: 1px solid var(--border-subtle); margin-bottom: 16px;">
+            <div style="display: flex; justify-content: space-between; font-size: 13px;">
+              <span id="moveGuestName" style="font-weight: 700; color: var(--text-high-contrast);">—</span>
+              <span id="moveOldRoomDisplay" style="color: #f59e0b; font-weight: 600;">Currently in Room —</span>
+            </div>
+            <div id="moveStayDates" style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">—</div>
+          </div>
+
+          <div class="form-control">
+            <label for="moveTargetRoomSelect">New Target Destination Room <span class="required">*</span></label>
+            <select id="moveTargetRoomSelect" required>
+              <option value="">Select Available Clean Room...</option>
+            </select>
+          </div>
+
+          <div class="form-control">
+            <label for="moveReason">Relocation Reason / Issue <span class="required">*</span></label>
+            <input type="text" id="moveReason" placeholder="e.g. In-room climate control malfunction on arrival" required>
+          </div>
+
+          <div class="form-control">
+            <label for="moveRelocatedBy">Front Desk Agent / Duty Manager <span class="required">*</span></label>
+            <input type="text" id="moveRelocatedBy" value="Front Desk Duty Manager" required>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 12px; font-size: 12px;">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+              <input type="checkbox" id="moveTransferKeycards" checked>
+              <span>Electronically transfer active RFID keycards to new door lock</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+              <input type="checkbox" id="moveOldRoomLockout" checked>
+              <span>Immediately place previous room into Maintenance lockout</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" id="btnCancelRoomMoveModal" class="btn btn-secondary">Cancel</button>
+          <button type="submit" id="btnSubmitRoomMove" class="btn btn-primary" style="background: #f59e0b; border-color: #f59e0b;">Execute Relocation</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <script src="app.js" defer></script>
 </body>
 </html>
+

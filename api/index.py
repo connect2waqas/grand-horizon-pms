@@ -47,6 +47,7 @@ from database import (
     seed_housekeeping_tasks,
     seed_keycards,
     seed_finance_rates_and_taxes,
+    seed_room_operations,
     IS_POSTGRES,
 )
 from schemas import (
@@ -138,6 +139,13 @@ from schemas import (
     CurrencyCode,
     TaxType,
     TaxAppliesTo,
+    RoomLockoutType,
+    RoomLockoutCreate,
+    RoomLockoutResponse,
+    RoomReleaseRequest,
+    RoomMoveRequest,
+    RoomMoveResponse,
+    RoomOperationsDashboardResponse,
 )
 
 # ==========================================
@@ -180,10 +188,12 @@ async def lifespan(app: FastAPI):
             seed_housekeeping_tasks()
             seed_keycards()
             seed_finance_rates_and_taxes()
+            seed_room_operations()
         seed_rate_plans()
         seed_housekeeping_tasks()
         seed_keycards()
         seed_finance_rates_and_taxes()
+        seed_room_operations()
     except Exception as e:
         print(f"Lifespan initialization note: {e}")
     yield
@@ -5643,6 +5653,656 @@ def get_finance_dashboard(conn: sqlite3.Connection = Depends(get_db)):
     )
 
 
+# ==============================================================================
+# Module 7: Advanced Room Operations, Out-of-Order (OOO) & Guest Relocation Engine
+# ==============================================================================
+
+def ensure_room_operations_tables(conn: sqlite3.Connection):
+    """Guarantees RoomLockouts and RoomMoves tables exist in SQLite / PostgreSQL."""
+    cursor = conn.cursor()
+    if not IS_POSTGRES:
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS RoomLockouts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            room_id INTEGER NOT NULL,
+            lockout_type TEXT NOT NULL DEFAULT 'Out_of_Order' CHECK(lockout_type IN ('Out_of_Order', 'Out_of_Service', 'Emergency_Repair')),
+            reason TEXT NOT NULL,
+            assigned_trade TEXT DEFAULT 'General Maintenance',
+            expected_completion TEXT DEFAULT NULL,
+            authorized_by TEXT NOT NULL DEFAULT 'Duty Manager',
+            notes TEXT DEFAULT '',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            resolved_at TIMESTAMP DEFAULT NULL,
+            resolved_by TEXT DEFAULT NULL,
+            resolution_notes TEXT DEFAULT NULL,
+            is_active INTEGER NOT NULL DEFAULT 1 CHECK(is_active IN (0, 1)),
+            FOREIGN KEY (room_id) REFERENCES Rooms(id) ON DELETE CASCADE
+        );
+        """)
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS RoomMoves (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            booking_id INTEGER NOT NULL,
+            old_room_id INTEGER NOT NULL,
+            new_room_id INTEGER NOT NULL,
+            reason TEXT NOT NULL,
+            relocated_by TEXT NOT NULL DEFAULT 'Front Desk Duty Manager',
+            keycards_reassigned INTEGER NOT NULL DEFAULT 0,
+            relocated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (booking_id) REFERENCES Bookings(id) ON DELETE CASCADE,
+            FOREIGN KEY (old_room_id) REFERENCES Rooms(id) ON DELETE CASCADE,
+            FOREIGN KEY (new_room_id) REFERENCES Rooms(id) ON DELETE CASCADE
+        );
+        """)
+        conn.commit()
+    else:
+        try:
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS RoomLockouts (
+                id SERIAL PRIMARY KEY,
+                room_id INTEGER NOT NULL REFERENCES Rooms(id) ON DELETE CASCADE,
+                lockout_type VARCHAR(50) NOT NULL DEFAULT 'Out_of_Order',
+                reason VARCHAR(255) NOT NULL,
+                assigned_trade VARCHAR(100) DEFAULT 'General Maintenance',
+                expected_completion VARCHAR(50) DEFAULT NULL,
+                authorized_by VARCHAR(100) NOT NULL DEFAULT 'Duty Manager',
+                notes TEXT DEFAULT '',
+                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                resolved_at TIMESTAMPTZ DEFAULT NULL,
+                resolved_by VARCHAR(100) DEFAULT NULL,
+                resolution_notes TEXT DEFAULT NULL,
+                is_active BOOLEAN NOT NULL DEFAULT TRUE
+            );
+            """)
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS RoomMoves (
+                id SERIAL PRIMARY KEY,
+                booking_id INTEGER NOT NULL REFERENCES Bookings(id) ON DELETE CASCADE,
+                old_room_id INTEGER NOT NULL REFERENCES Rooms(id) ON DELETE CASCADE,
+                new_room_id INTEGER NOT NULL REFERENCES Rooms(id) ON DELETE CASCADE,
+                reason VARCHAR(255) NOT NULL,
+                relocated_by VARCHAR(100) NOT NULL DEFAULT 'Front Desk Duty Manager',
+                keycards_reassigned INTEGER NOT NULL DEFAULT 0,
+                relocated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            );
+            """)
+            conn.commit()
+        except Exception as e:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            print(f"ensure_room_operations_tables postgres note: {e}")
+
+
+def row_to_room_lockout_response(r) -> RoomLockoutResponse:
+    keys = set(r.keys()) if hasattr(r, "keys") else set()
+    return RoomLockoutResponse(
+        id=int(r["id"]),
+        room_id=int(r["room_id"]),
+        room_number=str(r["room_number"]) if "room_number" in keys else f"Room {r['room_id']}",
+        room_type=str(r["room_type"]) if "room_type" in keys else "Standard",
+        lockout_type=str(r["lockout_type"]),
+        reason=str(r["reason"]),
+        assigned_trade=str(r["assigned_trade"]) if "assigned_trade" in keys and r["assigned_trade"] else None,
+        expected_completion=str(r["expected_completion"]) if "expected_completion" in keys and r["expected_completion"] else None,
+        authorized_by=str(r["authorized_by"]) if "authorized_by" in keys and r["authorized_by"] else "Duty Manager",
+        notes=str(r["notes"]) if "notes" in keys and r["notes"] else None,
+        created_at=str(r["created_at"]) if "created_at" in keys and r["created_at"] else "",
+        resolved_at=str(r["resolved_at"]) if "resolved_at" in keys and r["resolved_at"] else None,
+        resolved_by=str(r["resolved_by"]) if "resolved_by" in keys and r["resolved_by"] else None,
+        resolution_notes=str(r["resolution_notes"]) if "resolution_notes" in keys and r["resolution_notes"] else None,
+        is_active=bool(r["is_active"]),
+    )
+
+
+def row_to_room_move_response(r) -> RoomMoveResponse:
+    keys = set(r.keys()) if hasattr(r, "keys") else set()
+    return RoomMoveResponse(
+        booking_id=int(r["booking_id"]),
+        guest_name=str(r["guest_name"]) if "guest_name" in keys else "Hotel Guest",
+        old_room_id=int(r["old_room_id"]),
+        old_room_number=str(r["old_room_number"]) if "old_room_number" in keys else str(r["old_room_id"]),
+        new_room_id=int(r["new_room_id"]),
+        new_room_number=str(r["new_room_number"]) if "new_room_number" in keys else str(r["new_room_id"]),
+        reason=str(r["reason"]),
+        relocated_by=str(r["relocated_by"]) if "relocated_by" in keys and r["relocated_by"] else "Front Desk Duty Manager",
+        relocated_at=str(r["relocated_at"]) if "relocated_at" in keys and r["relocated_at"] else "",
+        keycards_reassigned_count=int(r["keycards_reassigned"] if "keycards_reassigned" in keys else (r["keycards_reassigned_count"] if "keycards_reassigned_count" in keys else 0)),
+        old_room_new_status=str(r["old_room_new_status"]) if "old_room_new_status" in keys else "Maintenance",
+        new_room_status=str(r["new_room_status"]) if "new_room_status" in keys else "Occupied",
+    )
+
+
+@app.post(
+    "/api/rooms/{room_id}/lockout",
+    response_model=RoomLockoutResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Decommission a room to Out-of-Order (OOO) or Out-of-Service (OOS)",
+    tags=["Room Operations & Lockouts"],
+)
+def declare_room_lockout(
+    room_id: int,
+    payload: RoomLockoutCreate,
+    conn: sqlite3.Connection = Depends(get_db),
+):
+    """
+    Takes a room out of inventory for severe defect (OOO) or cosmetic maintenance (OOS):
+    - Validates target room exists (404)
+    - Validates room is not currently occupied by an in-house guest (400 - suggest room move first)
+    - Transitions room status to 'Maintenance' with lock_reason set
+    - Creates active RoomLockouts record
+    - Logs audit trail entry ROOM_LOCKOUT_DECLARED
+    """
+    ensure_room_operations_tables(conn)
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT id, room_number, room_type, status FROM Rooms WHERE id = ?;", (room_id,))
+    room = cursor.fetchone()
+    if not room:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Room with ID {room_id} does not exist.",
+        )
+
+    if room["status"] == "Occupied":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Room {room['room_number']} is currently occupied by an in-house guest. Execute an emergency room move before taking out of order.",
+        )
+
+    cursor.execute(
+        "SELECT id FROM RoomLockouts WHERE room_id = ? AND (is_active = TRUE OR is_active = 1);",
+        (room_id,),
+    )
+    active_existing = cursor.fetchone()
+    if active_existing:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Room {room['room_number']} is already under an active lockout (#LK-{active_existing['id']}).",
+        )
+
+    cursor.execute(
+        """
+        INSERT INTO RoomLockouts (room_id, lockout_type, reason, assigned_trade, expected_completion, authorized_by, notes, is_active)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+        """,
+        (
+            room_id,
+            payload.lockout_type.value,
+            payload.reason.strip(),
+            payload.assigned_trade or "General Maintenance",
+            payload.expected_completion,
+            payload.authorized_by or "Duty Manager",
+            payload.notes.strip() if payload.notes else "",
+            bool(True) if IS_POSTGRES else 1,
+        ),
+    )
+    new_lockout_id = cursor.lastrowid
+
+    cursor.execute(
+        "UPDATE Rooms SET status = 'Maintenance', lock_reason = ?, cleanliness_status = 'Dirty' WHERE id = ?;",
+        (payload.reason.strip(), room_id),
+    )
+
+    record_audit_log(
+        conn,
+        action="ROOM_LOCKOUT_DECLARED",
+        entity_type="Room",
+        entity_id=room_id,
+        details={
+            "room_number": room["room_number"],
+            "lockout_id": new_lockout_id,
+            "lockout_type": payload.lockout_type.value,
+            "reason": payload.reason.strip(),
+            "authorized_by": payload.authorized_by,
+        },
+        actor=payload.authorized_by or "Duty Manager",
+    )
+    conn.commit()
+
+    cursor.execute(
+        """
+        SELECT l.*, r.room_number, r.room_type
+        FROM RoomLockouts l
+        JOIN Rooms r ON l.room_id = r.id
+        WHERE l.id = ?;
+        """,
+        (new_lockout_id,),
+    )
+    row = cursor.fetchone()
+    return row_to_room_lockout_response(row)
+
+
+@app.post(
+    "/api/rooms/{room_id}/release",
+    response_model=RoomLockoutResponse,
+    summary="Release a room from Out-of-Order back to service turnover",
+    tags=["Room Operations & Lockouts"],
+)
+def release_room_lockout(
+    room_id: int,
+    payload: RoomReleaseRequest,
+    conn: sqlite3.Connection = Depends(get_db),
+):
+    """
+    Certifies completion of physical repairs:
+    - Finds active lockout record for room (404 if none active)
+    - Sets resolved_at timestamp, resolved_by, and resolution_notes
+    - Transitions room status to 'Cleaning' with designated cleanliness status
+    - Clears room lock_reason
+    - Logs audit trail entry ROOM_LOCKOUT_RELEASED
+    """
+    ensure_room_operations_tables(conn)
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT id, room_number, room_type FROM Rooms WHERE id = ?;", (room_id,))
+    room = cursor.fetchone()
+    if not room:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Room with ID {room_id} does not exist.",
+        )
+
+    cursor.execute(
+        "SELECT * FROM RoomLockouts WHERE room_id = ? AND (is_active = TRUE OR is_active = 1) ORDER BY id DESC LIMIT 1;",
+        (room_id,),
+    )
+    lockout = cursor.fetchone()
+    if not lockout:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No active lockout found for Room {room['room_number']}.",
+        )
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    target_clean = payload.target_cleanliness or "Touch-up Required"
+
+    cursor.execute(
+        """
+        UPDATE RoomLockouts
+        SET is_active = ?,
+            resolved_at = ?,
+            resolved_by = ?,
+            resolution_notes = ?
+        WHERE id = ?;
+        """,
+        (
+            bool(False) if IS_POSTGRES else 0,
+            now_iso,
+            payload.released_by,
+            payload.resolution_notes,
+            lockout["id"],
+        ),
+    )
+
+    cursor.execute(
+        "UPDATE Rooms SET status = 'Cleaning', lock_reason = NULL, cleanliness_status = ? WHERE id = ?;",
+        (target_clean, room_id),
+    )
+
+    record_audit_log(
+        conn,
+        action="ROOM_LOCKOUT_RELEASED",
+        entity_type="Room",
+        entity_id=room_id,
+        details={
+            "room_number": room["room_number"],
+            "lockout_id": lockout["id"],
+            "released_by": payload.released_by,
+            "target_cleanliness": target_clean,
+            "resolution_notes": payload.resolution_notes,
+        },
+        actor=payload.released_by,
+    )
+    conn.commit()
+
+    cursor.execute(
+        """
+        SELECT l.*, r.room_number, r.room_type
+        FROM RoomLockouts l
+        JOIN Rooms r ON l.room_id = r.id
+        WHERE l.id = ?;
+        """,
+        (lockout["id"],),
+    )
+    row = cursor.fetchone()
+    return row_to_room_lockout_response(row)
+
+
+@app.get(
+    "/api/rooms/lockouts",
+    response_model=List[RoomLockoutResponse],
+    summary="List room lockouts with active and room filtering",
+    tags=["Room Operations & Lockouts"],
+)
+def list_room_lockouts(
+    is_active: Optional[bool] = Query(None, description="Filter active vs historical lockouts"),
+    room_id: Optional[int] = Query(None, description="Filter by room ID"),
+    conn: sqlite3.Connection = Depends(get_db),
+):
+    """Returns registry of room lockouts and physical defect histories."""
+    ensure_room_operations_tables(conn)
+    cursor = conn.cursor()
+
+    conditions = []
+    params = []
+
+    if is_active is not None:
+        if is_active:
+            conditions.append("l.is_active = TRUE" if IS_POSTGRES else "l.is_active = 1")
+        else:
+            conditions.append("NOT l.is_active" if IS_POSTGRES else "l.is_active = 0")
+    if room_id is not None:
+        conditions.append("l.room_id = ?")
+        params.append(room_id)
+
+    where_sql = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+    cursor.execute(
+        f"""
+        SELECT l.*, r.room_number, r.room_type
+        FROM RoomLockouts l
+        JOIN Rooms r ON l.room_id = r.id
+        {where_sql}
+        ORDER BY l.is_active DESC, l.id DESC;
+        """,
+        params,
+    )
+    rows = cursor.fetchall()
+    return [row_to_room_lockout_response(r) for r in rows]
+
+
+@app.post(
+    "/api/bookings/{booking_id}/room-move",
+    response_model=RoomMoveResponse,
+    summary="Execute an emergency room relocation for an in-house checked-in guest",
+    tags=["Room Operations & Lockouts"],
+)
+def execute_room_move(
+    booking_id: int,
+    payload: RoomMoveRequest,
+    conn: sqlite3.Connection = Depends(get_db),
+):
+    """
+    Relocates an in-house checked-in guest:
+    - Verifies booking exists and is Checked-in (400 if not)
+    - Verifies new room exists, is distinct from old room, and is Available
+    - Updates booking's assigned room to target room
+    - Vacates source room to Maintenance (with defect lock) or Cleaning
+    - Marks target destination room as Occupied
+    - Re-encodes active RFID keycards to new room if transfer_keycards is True
+    - Records immutable entry in RoomMoves ledger
+    - Logs audit trail entry ROOM_RELOCATION
+    """
+    ensure_room_operations_tables(conn)
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        SELECT b.id, b.room_id, b.booking_status,
+               g.first_name, g.last_name,
+               r.room_number as old_room_number, r.room_type as old_room_type
+        FROM Bookings b
+        JOIN Guests g ON b.guest_id = g.id
+        JOIN Rooms r ON b.room_id = r.id
+        WHERE b.id = ?;
+        """,
+        (booking_id,),
+    )
+    booking = cursor.fetchone()
+    if not booking:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Booking with ID {booking_id} does not exist.",
+        )
+
+    if booking["booking_status"] != "Checked-in":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot execute room move on reservation with status '{booking['booking_status']}'. Guest must be actively 'Checked-in'.",
+        )
+
+    old_room_id = booking["room_id"]
+    new_room_id = payload.new_room_id
+
+    if old_room_id == new_room_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Destination room ID cannot be identical to current assigned room.",
+        )
+
+    cursor.execute("SELECT id, room_number, room_type, status FROM Rooms WHERE id = ?;", (new_room_id,))
+    new_room = cursor.fetchone()
+    if not new_room:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Destination room with ID {new_room_id} does not exist.",
+        )
+
+    if new_room["status"] != "Available":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Destination Room {new_room['room_number']} is not Available (current status: '{new_room['status']}').",
+        )
+
+    guest_full_name = f"{booking['first_name']} {booking['last_name']}".strip()
+    old_room_num = booking["old_room_number"]
+    new_room_num = new_room["room_number"]
+
+    cursor.execute("UPDATE Bookings SET room_id = ? WHERE id = ?;", (new_room_id, booking_id))
+
+    old_room_new_status = "Maintenance" if payload.old_room_lockout else "Cleaning"
+    old_lock_reason = f"Vacated on guest room move: {payload.reason.strip()}" if payload.old_room_lockout else None
+    cursor.execute(
+        "UPDATE Rooms SET status = ?, lock_reason = ?, cleanliness_status = 'Dirty' WHERE id = ?;",
+        (old_room_new_status, old_lock_reason, old_room_id),
+    )
+
+    cursor.execute(
+        "UPDATE Rooms SET status = 'Occupied', lock_reason = NULL WHERE id = ?;",
+        (new_room_id,),
+    )
+
+    reassigned_count = 0
+    if payload.transfer_keycards:
+        try:
+            cursor.execute(
+                """
+                UPDATE Keycards
+                SET room_id = ?
+                WHERE booking_id = ? AND status = 'Active';
+                """,
+                (new_room_id, booking_id),
+            )
+            reassigned_count = 1
+        except Exception as e:
+            print(f"Keycard transfer note during room move: {e}")
+
+    cursor.execute(
+        """
+        INSERT INTO RoomMoves (booking_id, old_room_id, new_room_id, reason, relocated_by, keycards_reassigned)
+        VALUES (?, ?, ?, ?, ?, ?);
+        """,
+        (
+            booking_id,
+            old_room_id,
+            new_room_id,
+            payload.reason.strip(),
+            payload.relocated_by,
+            reassigned_count,
+        ),
+    )
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    record_audit_log(
+        conn,
+        action="ROOM_RELOCATION",
+        entity_type="Booking",
+        entity_id=booking_id,
+        details={
+            "guest_name": guest_full_name,
+            "old_room_id": old_room_id,
+            "old_room_number": old_room_num,
+            "new_room_id": new_room_id,
+            "new_room_number": new_room_num,
+            "reason": payload.reason.strip(),
+            "relocated_by": payload.relocated_by,
+            "keycards_reassigned": reassigned_count,
+            "old_room_status": old_room_new_status,
+        },
+        actor=payload.relocated_by,
+    )
+    conn.commit()
+
+    return RoomMoveResponse(
+        booking_id=booking_id,
+        guest_name=guest_full_name,
+        old_room_id=old_room_id,
+        old_room_number=old_room_num,
+        new_room_id=new_room_id,
+        new_room_number=new_room_num,
+        reason=payload.reason.strip(),
+        relocated_by=payload.relocated_by,
+        relocated_at=now_iso,
+        keycards_reassigned_count=reassigned_count,
+        old_room_new_status=old_room_new_status,
+        new_room_status="Occupied",
+    )
+
+
+@app.get(
+    "/api/bookings/{booking_id}/room-moves",
+    response_model=List[RoomMoveResponse],
+    summary="Get room relocation history for a booking",
+    tags=["Room Operations & Lockouts"],
+)
+def get_booking_room_moves(
+    booking_id: int,
+    conn: sqlite3.Connection = Depends(get_db),
+):
+    """Lists relocation events for a specific reservation."""
+    ensure_room_operations_tables(conn)
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        SELECT m.*,
+               g.first_name, g.last_name,
+               r_old.room_number as old_room_number,
+               r_new.room_number as new_room_number
+        FROM RoomMoves m
+        JOIN Bookings b ON m.booking_id = b.id
+        JOIN Guests g ON b.guest_id = g.id
+        JOIN Rooms r_old ON m.old_room_id = r_old.id
+        JOIN Rooms r_new ON m.new_room_id = r_new.id
+        WHERE m.booking_id = ?
+        ORDER BY m.id DESC;
+        """,
+        (booking_id,),
+    )
+    rows = cursor.fetchall()
+
+    results = []
+    for r in rows:
+        results.append(
+            RoomMoveResponse(
+                booking_id=int(r["booking_id"]),
+                guest_name=f"{r['first_name']} {r['last_name']}".strip(),
+                old_room_id=int(r["old_room_id"]),
+                old_room_number=str(r["old_room_number"]),
+                new_room_id=int(r["new_room_id"]),
+                new_room_number=str(r["new_room_number"]),
+                reason=str(r["reason"]),
+                relocated_by=str(r["relocated_by"]),
+                relocated_at=str(r["relocated_at"]),
+                keycards_reassigned_count=int(r["keycards_reassigned"]),
+                old_room_new_status="Maintenance",
+                new_room_status="Occupied",
+            )
+        )
+    return results
+
+
+@app.get(
+    "/api/rooms/operations-dashboard",
+    response_model=RoomOperationsDashboardResponse,
+    summary="Get comprehensive room operations, lockout metrics, and recent room transfers",
+    tags=["Room Operations & Lockouts"],
+)
+def get_room_operations_dashboard(conn: sqlite3.Connection = Depends(get_db)):
+    """Consolidated operations cockpit for front desk and engineering teams."""
+    ensure_room_operations_tables(conn)
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT status, COUNT(*) as cnt FROM Rooms GROUP BY status;")
+    status_counts = {r["status"]: int(r["cnt"]) for r in cursor.fetchall()}
+
+    total_rooms = sum(status_counts.values())
+    avail = status_counts.get("Available", 0)
+    occ = status_counts.get("Occupied", 0)
+    clean = status_counts.get("Cleaning", 0)
+
+    cursor.execute(
+        """
+        SELECT l.*, r.room_number, r.room_type
+        FROM RoomLockouts l
+        JOIN Rooms r ON l.room_id = r.id
+        WHERE (l.is_active = TRUE OR l.is_active = 1)
+        ORDER BY l.id DESC;
+        """
+    )
+    active_lockout_rows = cursor.fetchall()
+    active_lockouts = [row_to_room_lockout_response(r) for r in active_lockout_rows]
+
+    ooo_count = sum(1 for l in active_lockouts if l.lockout_type == "Out_of_Order")
+    oos_count = sum(1 for l in active_lockouts if l.lockout_type != "Out_of_Order")
+
+    cursor.execute(
+        """
+        SELECT m.*,
+               g.first_name, g.last_name,
+               r_old.room_number as old_room_number,
+               r_new.room_number as new_room_number
+        FROM RoomMoves m
+        JOIN Bookings b ON m.booking_id = b.id
+        JOIN Guests g ON b.guest_id = g.id
+        JOIN Rooms r_old ON m.old_room_id = r_old.id
+        JOIN Rooms r_new ON m.new_room_id = r_new.id
+        ORDER BY m.id DESC
+        LIMIT 10;
+        """
+    )
+    move_rows = cursor.fetchall()
+    recent_moves = [
+        RoomMoveResponse(
+            booking_id=int(r["booking_id"]),
+            guest_name=f"{r['first_name']} {r['last_name']}".strip(),
+            old_room_id=int(r["old_room_id"]),
+            old_room_number=str(r["old_room_number"]),
+            new_room_id=int(r["new_room_id"]),
+            new_room_number=str(r["new_room_number"]),
+            reason=str(r["reason"]),
+            relocated_by=str(r["relocated_by"]),
+            relocated_at=str(r["relocated_at"]),
+            keycards_reassigned_count=int(r["keycards_reassigned"]),
+            old_room_new_status="Maintenance",
+            new_room_status="Occupied",
+        )
+        for r in move_rows
+    ]
+
+    return RoomOperationsDashboardResponse(
+        total_rooms=total_rooms,
+        available_count=avail,
+        occupied_count=occ,
+        cleaning_count=clean,
+        out_of_order_count=ooo_count,
+        out_of_service_count=oos_count,
+        active_lockouts=active_lockouts,
+        recent_room_moves=recent_moves,
+    )
+
+
 # Mount static files if directory exists (local development fallback)
 # On Vercel, static assets are served directly from /public via edge CDN
 if STATIC_DIR.exists():
@@ -5651,4 +6311,5 @@ if STATIC_DIR.exists():
         app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="static_root")
     except Exception as e:
         print(f"StaticFiles mounting skipped: {e}")
+
 

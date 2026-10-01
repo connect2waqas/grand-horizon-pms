@@ -596,6 +596,43 @@ def init_db() -> None:
     );
     """)
 
+    # Table 15: RoomLockouts (Module 7: Out-of-Order & Out-of-Service Management)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS RoomLockouts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        room_id INTEGER NOT NULL,
+        lockout_type TEXT NOT NULL DEFAULT 'Out_of_Order' CHECK(lockout_type IN ('Out_of_Order', 'Out_of_Service', 'Emergency_Repair')),
+        reason TEXT NOT NULL,
+        assigned_trade TEXT DEFAULT 'General Maintenance',
+        expected_completion TEXT DEFAULT NULL,
+        authorized_by TEXT NOT NULL DEFAULT 'Duty Manager',
+        notes TEXT DEFAULT '',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        resolved_at TIMESTAMP DEFAULT NULL,
+        resolved_by TEXT DEFAULT NULL,
+        resolution_notes TEXT DEFAULT NULL,
+        is_active INTEGER NOT NULL DEFAULT 1 CHECK(is_active IN (0, 1)),
+        FOREIGN KEY (room_id) REFERENCES Rooms(id) ON DELETE CASCADE
+    );
+    """)
+
+    # Table 16: RoomMoves (Module 7: In-House Guest Emergency Relocation Ledger)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS RoomMoves (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        booking_id INTEGER NOT NULL,
+        old_room_id INTEGER NOT NULL,
+        new_room_id INTEGER NOT NULL,
+        reason TEXT NOT NULL,
+        relocated_by TEXT NOT NULL DEFAULT 'Front Desk Duty Manager',
+        keycards_reassigned INTEGER NOT NULL DEFAULT 0,
+        relocated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (booking_id) REFERENCES Bookings(id) ON DELETE CASCADE,
+        FOREIGN KEY (old_room_id) REFERENCES Rooms(id) ON DELETE CASCADE,
+        FOREIGN KEY (new_room_id) REFERENCES Rooms(id) ON DELETE CASCADE
+    );
+    """)
+
     conn.commit()
     conn.close()
     print("Database tables initialized successfully with foreign key enforcement.")
@@ -1182,6 +1219,82 @@ def seed_finance_rates_and_taxes():
     conn.close()
 
 
+def seed_room_operations():
+    """Initializes sample historical Out-of-Order records and room relocation events."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    if not IS_POSTGRES:
+        cursor.execute("SELECT COUNT(*) as cnt FROM RoomLockouts;")
+        row = cursor.fetchone()
+        cnt = row["cnt"] if row else 0
+        if cnt == 0:
+            cursor.execute("""
+            INSERT INTO RoomLockouts (room_id, lockout_type, reason, assigned_trade, expected_completion, authorized_by, notes, resolved_at, resolved_by, resolution_notes, is_active)
+            VALUES (2, 'Out_of_Order', 'HVAC compressor replacement and duct sanitization', 'HVAC Mechanicals', '2026-09-25 18:00:00', 'Duty Manager', 'Compressor valve failure resolved', '2026-09-26 10:00:00', 'Lead Technician', 'New compressor certified and tested', 0);
+            """)
+            cursor.execute("""
+            INSERT INTO RoomMoves (booking_id, old_room_id, new_room_id, reason, relocated_by, keycards_reassigned, relocated_at)
+            VALUES (1, 2, 1, 'In-room climate control system malfunction on arrival', 'Front Desk Duty Manager', 1, '2026-09-29 15:30:00');
+            """)
+            conn.commit()
+            print("Room operations (Lockouts & Moves) seeded (SQLite).")
+    else:
+        try:
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS RoomLockouts (
+                id SERIAL PRIMARY KEY,
+                room_id INTEGER NOT NULL REFERENCES Rooms(id) ON DELETE CASCADE,
+                lockout_type VARCHAR(50) NOT NULL DEFAULT 'Out_of_Order',
+                reason VARCHAR(255) NOT NULL,
+                assigned_trade VARCHAR(100) DEFAULT 'General Maintenance',
+                expected_completion VARCHAR(50) DEFAULT NULL,
+                authorized_by VARCHAR(100) NOT NULL DEFAULT 'Duty Manager',
+                notes TEXT DEFAULT '',
+                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                resolved_at TIMESTAMPTZ DEFAULT NULL,
+                resolved_by VARCHAR(100) DEFAULT NULL,
+                resolution_notes TEXT DEFAULT NULL,
+                is_active BOOLEAN NOT NULL DEFAULT TRUE
+            );
+            """)
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS RoomMoves (
+                id SERIAL PRIMARY KEY,
+                booking_id INTEGER NOT NULL REFERENCES Bookings(id) ON DELETE CASCADE,
+                old_room_id INTEGER NOT NULL REFERENCES Rooms(id) ON DELETE CASCADE,
+                new_room_id INTEGER NOT NULL REFERENCES Rooms(id) ON DELETE CASCADE,
+                reason VARCHAR(255) NOT NULL,
+                relocated_by VARCHAR(100) NOT NULL DEFAULT 'Front Desk Duty Manager',
+                keycards_reassigned INTEGER NOT NULL DEFAULT 0,
+                relocated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            );
+            """)
+            conn.commit()
+
+            cursor.execute("SELECT COUNT(*) as cnt FROM RoomLockouts;")
+            row = cursor.fetchone()
+            cnt = int(row["cnt"] if isinstance(row, dict) and "cnt" in row else (row[0] if row else 0))
+            if cnt == 0:
+                cursor.execute("""
+                INSERT INTO RoomLockouts (room_id, lockout_type, reason, assigned_trade, expected_completion, authorized_by, notes, resolved_at, resolved_by, resolution_notes, is_active)
+                VALUES (2, 'Out_of_Order', 'HVAC compressor replacement and duct sanitization', 'HVAC Mechanicals', '2026-09-25 18:00:00', 'Duty Manager', 'Compressor valve failure resolved', '2026-09-26 10:00:00', 'Lead Technician', 'New compressor certified and tested', FALSE);
+                """)
+                cursor.execute("""
+                INSERT INTO RoomMoves (booking_id, old_room_id, new_room_id, reason, relocated_by, keycards_reassigned, relocated_at)
+                VALUES (1, 2, 1, 'In-room climate control system malfunction on arrival', 'Front Desk Duty Manager', 1, '2026-09-29 15:30:00');
+                """)
+                conn.commit()
+                print("Room operations (Lockouts & Moves) seeded (PostgreSQL).")
+        except Exception as e:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            print(f"PostgreSQL Room operations seed note: {e}")
+    conn.close()
+
+
 if __name__ == "__main__":
     print(f"Target SQLite Database: {DATABASE_PATH}")
     init_db()
@@ -1195,6 +1308,8 @@ if __name__ == "__main__":
     seed_housekeeping_tasks()
     seed_keycards()
     seed_finance_rates_and_taxes()
+    seed_room_operations()
+
 
 
 

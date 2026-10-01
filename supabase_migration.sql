@@ -399,4 +399,55 @@ INSERT INTO public.taxrules (tax_name, tax_type, rate, currency_code, applies_to
 ('Eco Sustainability & Green Resort Levy', 'Flat_Per_Stay', 12.00, 'USD', 'All', TRUE)
 ON CONFLICT DO NOTHING;
 
+-- ==============================================================================
+-- Module 7: Advanced Room Operations, Out-of-Order (OOO) & Guest Relocation Engine
+-- ==============================================================================
+
+-- Table 15: roomlockouts (Out-of-Order and Out-of-Service Management)
+CREATE TABLE IF NOT EXISTS public.roomlockouts (
+    id SERIAL PRIMARY KEY,
+    room_id INTEGER NOT NULL REFERENCES public.rooms (id) ON DELETE CASCADE,
+    lockout_type VARCHAR(50) NOT NULL DEFAULT 'Out_of_Order',
+    reason VARCHAR(255) NOT NULL,
+    assigned_trade VARCHAR(100) DEFAULT 'General Maintenance',
+    expected_completion VARCHAR(50) DEFAULT NULL,
+    authorized_by VARCHAR(100) NOT NULL DEFAULT 'Duty Manager',
+    notes TEXT DEFAULT '',
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    resolved_at TIMESTAMPTZ DEFAULT NULL,
+    resolved_by VARCHAR(100) DEFAULT NULL,
+    resolution_notes TEXT DEFAULT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE
+);
+
+CREATE INDEX IF NOT EXISTS idx_room_lockouts_active ON public.roomlockouts (room_id, is_active);
+
+-- Table 16: roommoves (Guest Emergency Relocation Ledger)
+CREATE TABLE IF NOT EXISTS public.roommoves (
+    id SERIAL PRIMARY KEY,
+    booking_id INTEGER NOT NULL REFERENCES public.bookings (id) ON DELETE CASCADE,
+    old_room_id INTEGER NOT NULL REFERENCES public.rooms (id) ON DELETE CASCADE,
+    new_room_id INTEGER NOT NULL REFERENCES public.rooms (id) ON DELETE CASCADE,
+    reason VARCHAR(255) NOT NULL,
+    relocated_by VARCHAR(100) NOT NULL DEFAULT 'Front Desk Duty Manager',
+    keycards_reassigned INTEGER NOT NULL DEFAULT 0,
+    relocated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_room_moves_booking ON public.roommoves (booking_id);
+
+-- Enable RLS
+ALTER TABLE public.roomlockouts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.roommoves ENABLE ROW LEVEL SECURITY;
+
+-- 11. Initial Room Lockouts & Moves Seed Data
+INSERT INTO public.roomlockouts (room_id, lockout_type, reason, assigned_trade, expected_completion, authorized_by, notes, resolved_at, resolved_by, resolution_notes, is_active) VALUES
+(2, 'Out_of_Order', 'HVAC compressor replacement and duct sanitization', 'HVAC Mechanicals', '2026-09-25 18:00:00+00', 'Duty Manager', 'Compressor valve failure resolved', '2026-09-26 10:00:00+00', 'Lead Technician', 'New compressor certified and tested', FALSE)
+ON CONFLICT DO NOTHING;
+
+INSERT INTO public.roommoves (booking_id, old_room_id, new_room_id, reason, relocated_by, keycards_reassigned, relocated_at) VALUES
+(1, 2, 1, 'In-room climate control system malfunction on arrival', 'Front Desk Duty Manager', 1, '2026-09-29 15:30:00+00')
+ON CONFLICT DO NOTHING;
+
+
 

@@ -1092,6 +1092,95 @@ class FinanceDashboardResponse(BaseModel):
     effective_tax_rate_percent: float
 
 
+# ==============================================================================
+# Module 7: Advanced Room Operations, Out-of-Order (OOO) & Guest Relocation Engine
+# ==============================================================================
+
+class RoomLockoutType(str, Enum):
+    """Classification of room service unavailability."""
+    OUT_OF_ORDER = "Out_of_Order"       # Severe physical defect (taken off market, excludes from total available capacity)
+    OUT_OF_SERVICE = "Out_of_Service"   # Minor cosmetic repair or scheduled deep steam (remains in hotel inventory capacity)
+    EMERGENCY_REPAIR = "Emergency_Repair" # Sudden critical failure (A/C, burst pipe, electrical)
+
+
+class RoomLockoutCreate(BaseModel):
+    """Input payload to declare an Out-of-Order (OOO) or Out-of-Service (OOS) lockout."""
+    lockout_type: RoomLockoutType = Field(default=RoomLockoutType.OUT_OF_ORDER, description="Defect severity classification")
+    reason: str = Field(..., min_length=3, max_length=255, description="Specific defect requiring room decommission")
+    assigned_trade: Optional[str] = Field("General Maintenance", max_length=100, description="Trade contractor or engineering staff")
+    expected_completion: Optional[str] = Field(None, description="ISO timestamp or date of expected return to service")
+    authorized_by: str = Field(default="Duty Manager", max_length=100, description="Authorizing operational executive")
+    notes: Optional[str] = Field(None, max_length=500, description="Detailed diagnostic notes")
+
+
+class RoomLockoutResponse(BaseModel):
+    """Output representation of a room lockout record."""
+    id: int
+    room_id: int
+    room_number: str
+    room_type: str
+    lockout_type: str
+    reason: str
+    assigned_trade: Optional[str] = None
+    expected_completion: Optional[str] = None
+    authorized_by: str
+    notes: Optional[str] = None
+    created_at: str
+    resolved_at: Optional[str] = None
+    resolved_by: Optional[str] = None
+    resolution_notes: Optional[str] = None
+    is_active: bool
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class RoomReleaseRequest(BaseModel):
+    """Payload to release an OOO/OOS room back to inventory."""
+    released_by: str = Field(default="Facilities Supervisor", max_length=100, description="Staff member verifying completion")
+    target_cleanliness: str = Field(default="Touch-up Required", description="Housekeeping state upon return (Clean, Inspected, Touch-up Required)")
+    resolution_notes: Optional[str] = Field("Defect repaired and certified for guest turnover.", max_length=500)
+
+
+class RoomMoveRequest(BaseModel):
+    """Payload to execute an emergency guest relocation between rooms."""
+    new_room_id: int = Field(..., gt=0, description="Target available destination room ID")
+    reason: str = Field(..., min_length=3, max_length=255, description="Justification for room transfer (e.g. A/C leak, noise complaint, tier upgrade)")
+    relocated_by: str = Field(default="Front Desk Duty Manager", max_length=100, description="Front desk agent processing transfer")
+    transfer_keycards: bool = Field(default=True, description="Automatically re-encode in-house RFID keycards for target room")
+    old_room_lockout: bool = Field(default=True, description="Automatically place source room into Out-of-Order or Cleaning status")
+
+
+class RoomMoveResponse(BaseModel):
+    """Detailed summary confirmation of a guest room relocation."""
+    booking_id: int
+    guest_name: str
+    old_room_id: int
+    old_room_number: str
+    new_room_id: int
+    new_room_number: str
+    reason: str
+    relocated_by: str
+    relocated_at: str
+    keycards_reassigned_count: int
+    old_room_new_status: str
+    new_room_status: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class RoomOperationsDashboardResponse(BaseModel):
+    """High-level room operations and lockout matrix."""
+    total_rooms: int
+    available_count: int
+    occupied_count: int
+    cleaning_count: int
+    out_of_order_count: int
+    out_of_service_count: int
+    active_lockouts: List[RoomLockoutResponse]
+    recent_room_moves: List[RoomMoveResponse]
+
+
+
 
 
 

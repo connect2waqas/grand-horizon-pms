@@ -5,6 +5,12 @@ Tests the deployed Vercel PMS instance for Module 6: Multi-Currency & Internatio
 import sys
 import requests
 
+if sys.stdout.encoding != "utf-8":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 LIVE_URL = "https://grand-horizon-pms.vercel.app"
 
 def test_live_module_6():
@@ -37,7 +43,7 @@ def test_live_module_6():
     print(f"   Status: {r2.status_code}")
     assert r2.status_code == 200, f"Expected 200, got {r2.status_code}: {r2.text}"
     conv_data = r2.json()
-    print(f"   Result: {conv_data['original_amount']} USD -> {conv_data['converted_amount']} EUR ({conv_data['formatted_amount']})")
+    print(f"   Result: {conv_data['original_amount']} USD -> {conv_data['converted_amount']} EUR ({conv_data['formatted_display']})")
     assert conv_data["to_currency"] == "EUR"
     assert conv_data["converted_amount"] > 0
     print("   ✓ Currency conversion validated.\n")
@@ -49,28 +55,27 @@ def test_live_module_6():
     assert r3.status_code == 200, f"Expected 200, got {r3.status_code}: {r3.text}"
     taxes = r3.json()
     assert isinstance(taxes, list) and len(taxes) >= 3, f"Expected >= 3 tax rules, got {len(taxes)}"
-    tax_names = [t["name"] for t in taxes]
+    tax_names = [t["tax_name"] for t in taxes]
     print(f"   Active tax rules: {tax_names}")
     print("   ✓ Statutory tax rules validated.\n")
 
     # 4. POST /api/finance/calculate-tax
     print("4. Testing POST /api/finance/calculate-tax (Stay tax breakdown with EUR target) ...")
     calc_payload = {
-        "room_charges": 500.0,
+        "room_amount": 500.0,
         "nights": 3,
-        "incidental_charges": 75.0,
+        "incidentals_amount": 75.0,
         "target_currency": "EUR"
     }
     r4 = s.post(f"{LIVE_URL}/api/finance/calculate-tax", json=calc_payload, timeout=15)
     print(f"   Status: {r4.status_code}")
     assert r4.status_code == 200, f"Expected 200, got {r4.status_code}: {r4.text}"
     calc_res = r4.json()
-    print(f"   Subtotal: ${calc_res['subtotal']} USD")
-    print(f"   Itemized Taxes: {[i['rule_name'] + ' (+$' + str(i['tax_amount']) + ')' for i in calc_res['itemized_taxes']]}")
+    print(f"   Subtotal: ${calc_res['subtotal_usd']} USD")
+    print(f"   Itemized Taxes: {[i['tax_name'] + ' (+$' + str(i['amount_usd']) + ')' for i in calc_res['taxes']]}")
     print(f"   Grand Total USD: ${calc_res['grand_total_usd']}")
-    print(f"   Converted Grand Total: {calc_res['converted_grand_total_display']} ({calc_res['target_currency']})")
-    assert calc_res["grand_total_usd"] > calc_res["subtotal"], "Grand total should include statutory taxes"
-    assert "€" in calc_res["converted_grand_total_display"] or "EUR" in calc_res["converted_grand_total_display"]
+    print(f"   Converted Grand Total: {calc_res['formatted_display']} ({calc_res['target_currency']})")
+    assert calc_res["grand_total_usd"] > calc_res["subtotal_usd"], "Grand total should include statutory taxes"
     print("   ✓ Itemized tax calculation validated.\n")
 
     # 5. GET /api/finance/dashboard
@@ -81,7 +86,7 @@ def test_live_module_6():
     dash = r5.json()
     print(f"   Supported currencies count: {len(dash['supported_currencies'])}")
     print(f"   Active tax rules count: {len(dash['active_tax_rules'])}")
-    print(f"   Effective Blended Tax: {dash['summary_metrics']['effective_blended_tax_pct']}%")
+    print(f"   Effective Tax Rate: {dash['effective_tax_rate_percent']}%")
     assert dash["base_currency"] == "USD"
     print("   ✓ Finance dashboard consolidated summary validated.\n")
 

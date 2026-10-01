@@ -713,6 +713,103 @@
       </div>
     </section>
 
+    <!-- Module 5: Room Keycard / Access Control & Security Logging -->
+    <section class="keycard-section" id="keycardSection" aria-label="Keycard Access Control and Security Audit">
+      <div class="reservations-header">
+        <div>
+          <h2 class="panel-title">Keycard & Access Control Security</h2>
+          <p class="panel-subtitle">RFID/NFC card encoding, staff master keys, physical door tap simulation, and electronic access audit trails.</p>
+        </div>
+        <div class="crm-controls-group">
+          <!-- Security KPI Chips -->
+          <div class="maintenance-kpis-wrapper">
+            <span class="m-kpi-chip sec-chip-active"><strong id="secKpiActive">0</strong> Active Cards</span>
+            <span class="m-kpi-chip sec-chip-master"><strong id="secKpiMaster">0</strong> Master Keys</span>
+            <span class="m-kpi-chip"><strong id="secKpiTaps">0</strong> Taps Today</span>
+            <span class="m-kpi-chip sec-chip-denied"><strong id="secKpiDenied">0</strong> Denied Intrusions</span>
+            <span class="m-kpi-chip"><strong id="secKpiRevoked">0</strong> Revoked</span>
+          </div>
+
+          <div class="reservations-filter-tabs" id="securityViewTabs">
+            <button class="tab-btn active" data-view="cards">Keycard Registry</button>
+            <button class="tab-btn" data-view="logs">Live Door Taps</button>
+          </div>
+          <button id="btnOpenDoorTapModal" class="btn btn-secondary" style="font-size: 12px; padding: 7px 12px;">Simulate Door Tap</button>
+          <button id="btnOpenIssueCardModal" class="btn btn-primary" style="font-size: 12px; padding: 7px 14px;">+ Issue Keycard</button>
+        </div>
+      </div>
+
+      <!-- View 1: Keycards Directory Table -->
+      <div id="keycardsTableView" class="reservations-table-wrapper">
+        <div class="sec-filter-bar">
+          <div class="crm-search-wrapper" style="max-width: 280px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input type="text" id="secKeycardSearch" placeholder="Search cardholder or RFID UID..." aria-label="Search Keycards">
+          </div>
+          <div class="reservations-filter-tabs" id="keycardStatusFilterTabs">
+            <button class="tab-btn active" data-status="">All Cards</button>
+            <button class="tab-btn" data-status="Active">Active</button>
+            <button class="tab-btn" data-status="Revoked">Revoked</button>
+            <button class="tab-btn" data-type="Guest">Guests</button>
+            <button class="tab-btn" data-type="Staff Master">Staff Master</button>
+          </div>
+        </div>
+
+        <table class="reservations-table" id="keycardsTable">
+          <thead>
+            <tr>
+              <th style="width: 150px;">Card UID</th>
+              <th>Cardholder</th>
+              <th style="width: 130px;">Tier / Category</th>
+              <th style="width: 100px;">Assigned Room</th>
+              <th style="width: 120px;">Issued At</th>
+              <th style="width: 110px;">Status</th>
+              <th style="width: 170px;">Security Actions</th>
+            </tr>
+          </thead>
+          <tbody id="keycardsTableBody">
+            <!-- Dynamically populated by app.js -->
+          </tbody>
+        </table>
+        <div id="keycardsEmpty" class="state-placeholder hidden">
+          <p>No keycards matching the filter criteria.</p>
+        </div>
+      </div>
+
+      <!-- View 2: Access Logs Table -->
+      <div id="accessLogsTableView" class="reservations-table-wrapper hidden">
+        <div class="sec-filter-bar">
+          <div class="reservations-filter-tabs" id="accessLogsFilterTabs">
+            <button class="tab-btn active" data-outcome="">All Events</button>
+            <button class="tab-btn" data-outcome="Granted">Granted Entries</button>
+            <button class="tab-btn" data-outcome="Denied">Security Denials</button>
+          </div>
+        </div>
+
+        <table class="reservations-table" id="accessLogsTable">
+          <thead>
+            <tr>
+              <th style="width: 140px;">Timestamp</th>
+              <th style="width: 150px;">Card UID</th>
+              <th style="width: 110px;">Target Room</th>
+              <th style="width: 180px;">Reader Location</th>
+              <th>Cardholder / Role</th>
+              <th style="width: 180px;">Access Outcome</th>
+            </tr>
+          </thead>
+          <tbody id="accessLogsTableBody">
+            <!-- Dynamically populated by app.js -->
+          </tbody>
+        </table>
+        <div id="accessLogsEmpty" class="state-placeholder hidden">
+          <p>No door tap access logs recorded.</p>
+        </div>
+      </div>
+    </section>
+
   </main>
 
   <!-- Reservation Receipt Modal -->
@@ -1157,6 +1254,116 @@
           <button type="submit" id="btnSubmitHkTask" class="btn btn-primary">Dispatch Task</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- Issue Keycard Modal -->
+  <div id="issueCardModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-icon-badge icon-indigo">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="2" y="5" width="20" height="14" rx="2"></rect>
+            <line x1="2" y1="10" x2="22" y2="10"></line>
+          </svg>
+        </div>
+        <h3 class="modal-title">Encode & Issue Keycard</h3>
+        <p class="modal-subtitle">Encode electronic RFID credential for guest or team member</p>
+      </div>
+
+      <form id="issueKeycardForm">
+        <div class="modal-body">
+          <div class="form-control">
+            <label for="kcModalHolder">Cardholder Full Name <span class="required">*</span></label>
+            <input type="text" id="kcModalHolder" placeholder="e.g. Alexander Pierce or Elena Rostova" required>
+          </div>
+
+          <div class="form-grid-2">
+            <div class="form-control">
+              <label for="kcModalType">Card Authorization Level</label>
+              <select id="kcModalType" required>
+                <option value="Guest">Guest (Single Room)</option>
+                <option value="Staff Master">Staff Master (Universal Override)</option>
+                <option value="Housekeeping">Housekeeping Attendant</option>
+                <option value="Maintenance">Maintenance Technician</option>
+                <option value="Emergency Override">Emergency Override</option>
+              </select>
+            </div>
+            <div class="form-control">
+              <label for="kcModalRoom">Assigned Room</label>
+              <select id="kcModalRoom">
+                <option value="">Select Room (Optional for Master)...</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-control">
+            <label for="kcModalUid">Custom Hardware UID (Optional)</label>
+            <input type="text" id="kcModalUid" placeholder="Leave blank to auto-generate (e.g. RFID-101-9281)">
+          </div>
+
+          <div class="form-control">
+            <label for="kcModalNotes">Security & Clearance Remarks</label>
+            <textarea id="kcModalNotes" rows="2" placeholder="e.g. Replaces misplaced keycard; issued via Front Desk encoder"></textarea>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" id="btnCancelIssueCardModal" class="btn btn-secondary">Cancel</button>
+          <button type="submit" id="btnSubmitIssueCard" class="btn btn-primary">Encode & Activate Card</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Simulate Door Tap Modal -->
+  <div id="doorTapModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-icon-badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+          </svg>
+        </div>
+        <h3 class="modal-title">Door Reader Lock Tap Simulator</h3>
+        <p class="modal-subtitle">Present RFID keycard against electronic door lock scanner</p>
+      </div>
+
+      <div class="modal-body">
+        <div class="form-control">
+          <label for="tapModalRoomSelect">Select Target Door Lock</label>
+          <select id="tapModalRoomSelect" required>
+            <option value="">Choose Room Door...</option>
+          </select>
+        </div>
+
+        <div class="form-control">
+          <label for="tapModalCardSelect">Select Registered Keycard</label>
+          <select id="tapModalCardSelect">
+            <option value="">Choose Registered Card...</option>
+          </select>
+        </div>
+
+        <div class="form-control">
+          <label for="tapModalCustomUid">Or Enter Manual Hardware UID</label>
+          <input type="text" id="tapModalCustomUid" placeholder="e.g. RFID-101A-8821 or RFID-MASTER-001">
+        </div>
+
+        <div class="tap-simulation-display hidden" id="tapResultBanner">
+          <div class="tap-status-icon" id="tapResultIcon"></div>
+          <div class="tap-status-content">
+            <h4 id="tapResultTitle">Access Granted</h4>
+            <p id="tapResultMessage">Welcome to Room 101, Alexander Pierce.</p>
+            <span class="tap-timestamp" id="tapResultTime"></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" id="btnCloseDoorTapModal" class="btn btn-secondary">Close</button>
+        <button type="button" id="btnExecuteDoorTap" class="btn btn-primary">Tap Lock Reader</button>
+      </div>
     </div>
   </div>
 

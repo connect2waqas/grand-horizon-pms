@@ -154,6 +154,9 @@ document.addEventListener("DOMContentLoaded", () => {
   fetchMaintenanceSummary();
   fetchHousekeepingDashboard();
   fetchHousekeepingTasks();
+  fetchSecurityDashboard();
+  fetchKeycards();
+  fetchAccessLogs();
   setupEventListeners();
 });
 
@@ -489,6 +492,113 @@ function setupEventListeners() {
   const dispatchHkForm = document.getElementById("dispatchHkTaskForm");
   if (dispatchHkForm) {
     dispatchHkForm.addEventListener("submit", handleDispatchHkTaskSubmit);
+  }
+
+  // Module 5: Security View Tabs (Keycards vs Access Logs)
+  const secViewTabs = document.getElementById("securityViewTabs");
+  if (secViewTabs) {
+    secViewTabs.addEventListener("click", (e) => {
+      const tab = e.target.closest(".tab-btn");
+      if (!tab) return;
+      secViewTabs.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
+      tab.classList.add("active");
+
+      const view = tab.dataset.view;
+      const cardsView = document.getElementById("keycardsTableView");
+      const logsView = document.getElementById("accessLogsTableView");
+
+      if (view === "cards") {
+        if (cardsView) cardsView.classList.remove("hidden");
+        if (logsView) logsView.classList.add("hidden");
+        fetchKeycards();
+      } else {
+        if (cardsView) cardsView.classList.add("hidden");
+        if (logsView) logsView.classList.remove("hidden");
+        fetchAccessLogs();
+      }
+    });
+  }
+
+  // Module 5: Keycard Search
+  const secSearchInput = document.getElementById("secKeycardSearch");
+  if (secSearchInput) {
+    let secSearchTimer = null;
+    secSearchInput.addEventListener("input", (e) => {
+      clearTimeout(secSearchTimer);
+      secSearchTimer = setTimeout(() => {
+        currentSecSearch = e.target.value.trim();
+        fetchKeycards();
+      }, 250);
+    });
+  }
+
+  // Module 5: Keycard Status & Type Filter Tabs
+  const kcFilterTabs = document.getElementById("keycardStatusFilterTabs");
+  if (kcFilterTabs) {
+    kcFilterTabs.addEventListener("click", (e) => {
+      const tab = e.target.closest(".tab-btn");
+      if (!tab) return;
+      kcFilterTabs.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
+      tab.classList.add("active");
+
+      currentSecStatusFilter = tab.dataset.status || "";
+      currentSecTypeFilter = tab.dataset.type || "";
+      fetchKeycards();
+    });
+  }
+
+  // Module 5: Access Logs Outcome Filter Tabs
+  const accessFilterTabs = document.getElementById("accessLogsFilterTabs");
+  if (accessFilterTabs) {
+    accessFilterTabs.addEventListener("click", (e) => {
+      const tab = e.target.closest(".tab-btn");
+      if (!tab) return;
+      accessFilterTabs.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
+      tab.classList.add("active");
+
+      currentSecOutcomeFilter = tab.dataset.outcome || "";
+      fetchAccessLogs();
+    });
+  }
+
+  // Module 5: Issue Keycard Modal triggers
+  const btnOpenIssueKc = document.getElementById("btnOpenIssueCardModal");
+  if (btnOpenIssueKc) {
+    btnOpenIssueKc.addEventListener("click", openIssueCardModal);
+  }
+  const btnCancelIssueKc = document.getElementById("btnCancelIssueCardModal");
+  if (btnCancelIssueKc) {
+    btnCancelIssueKc.addEventListener("click", closeIssueCardModal);
+  }
+  const issueKcModal = document.getElementById("issueCardModal");
+  if (issueKcModal) {
+    issueKcModal.addEventListener("click", (e) => {
+      if (e.target === issueKcModal) closeIssueCardModal();
+    });
+  }
+  const issueKcForm = document.getElementById("issueKeycardForm");
+  if (issueKcForm) {
+    issueKcForm.addEventListener("submit", handleIssueKeycardSubmit);
+  }
+
+  // Module 5: Door Tap Simulator Modal triggers
+  const btnOpenDoorTap = document.getElementById("btnOpenDoorTapModal");
+  if (btnOpenDoorTap) {
+    btnOpenDoorTap.addEventListener("click", () => openDoorTapModalWithCard());
+  }
+  const btnCloseDoorTap = document.getElementById("btnCloseDoorTapModal");
+  if (btnCloseDoorTap) {
+    btnCloseDoorTap.addEventListener("click", closeDoorTapModal);
+  }
+  const doorTapModal = document.getElementById("doorTapModal");
+  if (doorTapModal) {
+    doorTapModal.addEventListener("click", (e) => {
+      if (e.target === doorTapModal) closeDoorTapModal();
+    });
+  }
+  const btnExecuteTap = document.getElementById("btnExecuteDoorTap");
+  if (btnExecuteTap) {
+    btnExecuteTap.addEventListener("click", handleExecuteDoorTap);
   }
 }
 
@@ -1615,6 +1725,8 @@ async function handleCheckIn(bookingId) {
     fetchAuditLogs();
     fetchHousekeepingDashboard();
     fetchHousekeepingTasks(currentHkFilter);
+    fetchSecurityDashboard();
+    fetchKeycards();
   } catch (err) {
     showToast(`Check-in failed: ${err.message}`, "error");
   }
@@ -1638,6 +1750,8 @@ async function handleCheckOut(bookingId) {
     fetchAuditLogs();
     fetchHousekeepingDashboard();
     fetchHousekeepingTasks(currentHkFilter);
+    fetchSecurityDashboard();
+    fetchKeycards();
   } catch (err) {
     showToast(`Check-out failed: ${err.message}`, "error");
   }
@@ -2827,6 +2941,396 @@ async function handleDispatchHkTaskSubmit(e) {
     fetchRooms();
   } catch (err) {
     showToast(`Dispatch failed: ${err.message}`, "error");
+  }
+}
+
+// ==========================================
+// Module 5: Keycard & Access Control Security Controller
+// ==========================================
+
+let currentKeycardsData = [];
+let currentAccessLogsData = [];
+let currentSecSearch = "";
+let currentSecStatusFilter = "";
+let currentSecTypeFilter = "";
+let currentSecOutcomeFilter = "";
+
+/**
+ * Fetches executive security dashboard metrics: active cards, master keys, taps, denied intrusions, revoked
+ */
+async function fetchSecurityDashboard() {
+  try {
+    const res = await fetch("/api/access-control/dashboard");
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    const elActive = document.getElementById("secKpiActive");
+    const elMaster = document.getElementById("secKpiMaster");
+    const elTaps = document.getElementById("secKpiTaps");
+    const elDenied = document.getElementById("secKpiDenied");
+    const elRevoked = document.getElementById("secKpiRevoked");
+
+    if (elActive) elActive.textContent = data.active_cards;
+    if (elMaster) elMaster.textContent = data.master_cards;
+    if (elTaps) elTaps.textContent = data.taps_today;
+    if (elDenied) elDenied.textContent = data.denied_intrusions_today;
+    if (elRevoked) elRevoked.textContent = data.revoked_cards;
+  } catch (err) {
+    console.error("fetchSecurityDashboard error:", err);
+  }
+}
+
+/**
+ * Fetches keycards directory with optional multi-filtering
+ */
+async function fetchKeycards() {
+  const tbody = document.getElementById("keycardsTableBody");
+  const emptyPlaceholder = document.getElementById("keycardsEmpty");
+  if (!tbody) return;
+
+  try {
+    const params = new URLSearchParams();
+    if (currentSecSearch) params.append("search", currentSecSearch);
+    if (currentSecStatusFilter) params.append("status", currentSecStatusFilter);
+    if (currentSecTypeFilter) params.append("card_type", currentSecTypeFilter);
+
+    const qs = params.toString();
+    const url = qs ? `/api/keycards?${qs}` : "/api/keycards";
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    currentKeycardsData = await res.json();
+    renderKeycardsTable(currentKeycardsData);
+  } catch (err) {
+    console.error("fetchKeycards error:", err);
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 20px;">Failed to load keycards.</td></tr>`;
+  }
+}
+
+/**
+ * Renders keycards into keycardsTableBody
+ */
+function renderKeycardsTable(cards) {
+  const tbody = document.getElementById("keycardsTableBody");
+  const emptyPlaceholder = document.getElementById("keycardsEmpty");
+  if (!tbody) return;
+
+  tbody.innerHTML = "";
+  if (!cards || cards.length === 0) {
+    if (emptyPlaceholder) emptyPlaceholder.classList.remove("hidden");
+    return;
+  }
+  if (emptyPlaceholder) emptyPlaceholder.classList.add("hidden");
+
+  cards.forEach((k) => {
+    const tr = document.createElement("tr");
+
+    // Card type badge
+    let typeClass = "badge-type-guest";
+    if (k.card_type === "Staff Master") typeClass = "badge-type-master";
+    else if (k.card_type === "Housekeeping") typeClass = "badge-type-housekeeping";
+    else if (k.card_type === "Maintenance") typeClass = "badge-type-maintenance";
+    else if (k.card_type === "Emergency Override") typeClass = "badge-type-emergency";
+
+    // Status badge
+    let statusClass = "badge-card-active";
+    if (k.status === "Revoked") statusClass = "badge-card-revoked";
+    else if (k.status === "Suspended") statusClass = "badge-card-suspended";
+    else if (k.status === "Expired") statusClass = "badge-card-revoked";
+
+    // Room info
+    let roomDisplay = k.room_id ? `Room ${k.room ? k.room.room_number : k.room_id}` : `<span style="color: #a5b4fc; font-weight: 600;">Universal Master</span>`;
+
+    // Action buttons
+    let actionButtons = `
+      <div class="table-actions-group">
+        <button type="button" class="btn-card-tap" onclick="openDoorTapModalWithCard('${k.card_uid}', ${k.room_id || 'null'})" title="Simulate Door Tap">Tap Lock</button>
+    `;
+    if (k.status === "Active") {
+      actionButtons += `<button type="button" class="btn-card-revoke" onclick="handleRevokeKeycard(${k.id}, '${k.card_uid}')">Revoke</button>`;
+    } else {
+      actionButtons += `<span style="font-size: 11px; color: var(--text-muted); align-self: center;">Deactivated</span>`;
+    }
+    actionButtons += `</div>`;
+
+    const holderSub = k.booking_id ? `<span style="font-size: 11px; color: var(--text-muted); display: block;">Booking Folio #${k.booking_id}</span>` : `<span style="font-size: 11px; color: var(--text-muted); display: block;">${k.issued_by || 'Staff Credential'}</span>`;
+
+    tr.innerHTML = `
+      <td><span class="card-uid-mono">${escapeHtml(k.card_uid)}</span></td>
+      <td>
+        <strong style="color: var(--text-high-contrast);">${escapeHtml(k.holder_name)}</strong>
+        ${holderSub}
+      </td>
+      <td><span class="${typeClass}">${escapeHtml(k.card_type)}</span></td>
+      <td>${roomDisplay}</td>
+      <td><span style="font-size: 12px; color: var(--text-muted);">${formatTimestamp(k.issued_at)}</span></td>
+      <td><span class="${statusClass}">${escapeHtml(k.status)}</span></td>
+      <td>${actionButtons}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+/**
+ * Fetches door access audit logs with optional outcome filtering
+ */
+async function fetchAccessLogs() {
+  const tbody = document.getElementById("accessLogsTableBody");
+  const emptyPlaceholder = document.getElementById("accessLogsEmpty");
+  if (!tbody) return;
+
+  try {
+    const params = new URLSearchParams();
+    if (currentSecOutcomeFilter === "Granted") {
+      params.append("access_granted", "true");
+    } else if (currentSecOutcomeFilter === "Denied") {
+      params.append("access_granted", "false");
+    }
+
+    const qs = params.toString();
+    const url = qs ? `/api/access-control/logs?${qs}` : "/api/access-control/logs";
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    currentAccessLogsData = await res.json();
+    renderAccessLogsTable(currentAccessLogsData);
+  } catch (err) {
+    console.error("fetchAccessLogs error:", err);
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 20px;">Failed to load access logs.</td></tr>`;
+  }
+}
+
+/**
+ * Renders door tap access audit events into accessLogsTableBody
+ */
+function renderAccessLogsTable(logs) {
+  const tbody = document.getElementById("accessLogsTableBody");
+  const emptyPlaceholder = document.getElementById("accessLogsEmpty");
+  if (!tbody) return;
+
+  tbody.innerHTML = "";
+  if (!logs || logs.length === 0) {
+    if (emptyPlaceholder) emptyPlaceholder.classList.remove("hidden");
+    return;
+  }
+  if (emptyPlaceholder) emptyPlaceholder.classList.add("hidden");
+
+  logs.forEach((l) => {
+    const tr = document.createElement("tr");
+
+    const badgeClass = l.access_granted ? "badge-granted" : "badge-denied";
+    const icon = l.access_granted ? "✓" : "✕";
+
+    const holderInfo = l.keycard ? `${escapeHtml(l.keycard.holder_name)} <span style="font-size: 11px; color: var(--text-muted);">(${escapeHtml(l.keycard.card_type)})</span>` : `<span style="font-size: 11px; color: var(--text-muted);">Unregistered RFID token</span>`;
+
+    tr.innerHTML = `
+      <td><span class="table-folio-id">${formatTimestamp(l.attempted_at)}</span></td>
+      <td><span class="card-uid-mono">${escapeHtml(l.card_uid)}</span></td>
+      <td><strong>Room ${l.room ? l.room.room_number : l.room_id}</strong></td>
+      <td><span style="font-size: 12px; color: var(--text-high-contrast);">${escapeHtml(l.reader_location || 'Room Exterior Reader')}</span></td>
+      <td>${holderInfo}</td>
+      <td><span class="${badgeClass}">${icon} ${escapeHtml(l.event_type)}</span></td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+/**
+ * Revokes a keycard immediately
+ */
+async function handleRevokeKeycard(cardId, cardUid) {
+  const reason = prompt(`Provide audit reason for revoking keycard ${cardUid}:`, "Reported lost / guest checkout");
+  if (!reason || !reason.trim()) return;
+
+  try {
+    const res = await fetch(`/api/keycards/${cardId}/revoke`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reason: reason.trim() }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    showToast(`Keycard ${cardUid} has been deactivated & revoked.`, "info");
+    fetchKeycards();
+    fetchSecurityDashboard();
+    fetchAuditLogs();
+  } catch (err) {
+    showToast(`Revocation failed: ${err.message}`, "error");
+  }
+}
+
+/**
+ * Populates and opens Issue Keycard Modal
+ */
+function openIssueCardModal() {
+  const modal = document.getElementById("issueCardModal");
+  const form = document.getElementById("issueKeycardForm");
+  const roomSelect = document.getElementById("kcModalRoom");
+  if (!modal || !roomSelect) return;
+
+  roomSelect.innerHTML = '<option value="">Select Room (Optional for Master)...</option>';
+  allRoomsData.forEach((r) => {
+    const opt = document.createElement("option");
+    opt.value = r.id;
+    opt.textContent = `Room ${r.room_number} (${r.room_type} - ${r.status})`;
+    roomSelect.appendChild(opt);
+  });
+
+  if (form) form.reset();
+  modal.classList.remove("hidden");
+}
+
+function closeIssueCardModal() {
+  const modal = document.getElementById("issueCardModal");
+  if (modal) modal.classList.add("hidden");
+}
+
+/**
+ * Handles encoding and issuing a keycard
+ */
+async function handleIssueKeycardSubmit(e) {
+  e.preventDefault();
+  const holderName = document.getElementById("kcModalHolder").value.trim();
+  const cardType = document.getElementById("kcModalType").value;
+  const roomVal = document.getElementById("kcModalRoom").value;
+  const customUid = document.getElementById("kcModalUid").value.trim();
+  const notes = document.getElementById("kcModalNotes").value.trim();
+
+  if (!holderName) {
+    showToast("Please enter cardholder name.", "error");
+    return;
+  }
+
+  const payload = {
+    card_holder_name: holderName,
+    card_type: cardType,
+    room_id: roomVal ? parseInt(roomVal, 10) : null,
+    card_uid: customUid || null,
+    issued_by: "Security Front Desk",
+    notes: notes || null,
+  };
+
+  try {
+    const res = await fetch("/api/keycards/issue", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    const card = await res.json();
+    showToast(`Keycard ${card.card_uid} encoded & activated for ${card.holder_name}!`, "success");
+    closeIssueCardModal();
+    fetchKeycards();
+    fetchSecurityDashboard();
+    fetchAuditLogs();
+  } catch (err) {
+    showToast(`Issuance failed: ${err.message}`, "error");
+  }
+}
+
+/**
+ * Opens door reader tap modal with optional pre-selected card & room
+ */
+function openDoorTapModalWithCard(cardUid = null, roomId = null) {
+  const modal = document.getElementById("doorTapModal");
+  const roomSelect = document.getElementById("tapModalRoomSelect");
+  const cardSelect = document.getElementById("tapModalCardSelect");
+  const customUid = document.getElementById("tapModalCustomUid");
+  const resultBanner = document.getElementById("tapResultBanner");
+  if (!modal || !roomSelect || !cardSelect) return;
+
+  if (resultBanner) resultBanner.classList.add("hidden");
+
+  // Populate rooms
+  roomSelect.innerHTML = '<option value="">Choose Room Door...</option>';
+  allRoomsData.forEach((r) => {
+    const opt = document.createElement("option");
+    opt.value = r.id;
+    opt.textContent = `Room ${r.room_number} (${r.room_type} - ${r.status})`;
+    if (roomId && r.id === roomId) opt.selected = true;
+    roomSelect.appendChild(opt);
+  });
+
+  // Populate registered cards
+  cardSelect.innerHTML = '<option value="">Choose Registered Card...</option>';
+  currentKeycardsData.forEach((k) => {
+    const opt = document.createElement("option");
+    opt.value = k.card_uid;
+    const roomStr = k.room_id ? `Room ${k.room ? k.room.room_number : k.room_id}` : "Master";
+    opt.textContent = `${k.card_uid} — ${k.holder_name} (${k.card_type}, ${roomStr}, ${k.status})`;
+    if (cardUid && k.card_uid === cardUid) opt.selected = true;
+    cardSelect.appendChild(opt);
+  });
+
+  if (customUid) customUid.value = "";
+  modal.classList.remove("hidden");
+}
+
+function closeDoorTapModal() {
+  const modal = document.getElementById("doorTapModal");
+  if (modal) modal.classList.add("hidden");
+}
+
+/**
+ * Simulates physical door tap against electronic lock reader
+ */
+async function handleExecuteDoorTap() {
+  const roomSelect = document.getElementById("tapModalRoomSelect");
+  const cardSelect = document.getElementById("tapModalCardSelect");
+  const customUidInput = document.getElementById("tapModalCustomUid");
+  const banner = document.getElementById("tapResultBanner");
+  const title = document.getElementById("tapResultTitle");
+  const msg = document.getElementById("tapResultMessage");
+  const icon = document.getElementById("tapResultIcon");
+  const time = document.getElementById("tapResultTime");
+
+  const roomId = roomSelect.value ? parseInt(roomSelect.value, 10) : null;
+  const cardUid = customUidInput.value.trim() || cardSelect.value;
+
+  if (!roomId) {
+    showToast("Please choose target room door lock.", "error");
+    return;
+  }
+  if (!cardUid) {
+    showToast("Please select or enter an RFID keycard UID.", "error");
+    return;
+  }
+
+  try {
+    const res = await fetch("/api/access-control/tap", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        card_uid: cardUid,
+        room_id: roomId,
+        reader_location: `Room ${roomSelect.options[roomSelect.selectedIndex].text.split(' ')[1]} Door Scanner`,
+      }),
+    });
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.detail || `HTTP ${res.status}`);
+
+    if (banner) {
+      banner.classList.remove("hidden");
+      if (result.access_granted) {
+        banner.className = "tap-simulation-display granted";
+        if (title) title.textContent = "Access Granted — Door Unlocked";
+        if (icon) icon.innerHTML = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
+      } else {
+        banner.className = "tap-simulation-display denied";
+        if (title) title.textContent = "Access Denied — Lock Engaged";
+        if (icon) icon.innerHTML = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>`;
+      }
+      if (msg) msg.textContent = result.message;
+      if (time) time.textContent = `${result.event_type} • ${result.timestamp ? result.timestamp.replace('T', ' ').split('.')[0] : 'Just now'}`;
+    }
+
+    fetchSecurityDashboard();
+    fetchAccessLogs();
+  } catch (err) {
+    showToast(`Door tap failed: ${err.message}`, "error");
   }
 }
 

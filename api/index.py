@@ -45,6 +45,7 @@ from database import (
     seed_maintenance_tickets,
     seed_folio_charges,
     seed_housekeeping_tasks,
+    seed_keycards,
     IS_POSTGRES,
 )
 from schemas import (
@@ -109,6 +110,17 @@ from schemas import (
     RoomStatusUpdate,
     RoomType,
     VIPTier,
+    KeycardType,
+    KeycardStatus,
+    AccessEventType,
+    KeycardBase,
+    KeycardIssueRequest,
+    KeycardRevokeRequest,
+    KeycardResponse,
+    DoorTapRequest,
+    DoorTapResponse,
+    AccessLogResponse,
+    AccessControlDashboardResponse,
 )
 
 # ==========================================
@@ -149,8 +161,10 @@ async def lifespan(app: FastAPI):
             seed_maintenance_tickets()
             seed_folio_charges()
             seed_housekeeping_tasks()
+            seed_keycards()
         seed_rate_plans()
         seed_housekeeping_tasks()
+        seed_keycards()
     except Exception as e:
         print(f"Lifespan initialization note: {e}")
     yield
@@ -1923,6 +1937,29 @@ def check_in_booking(
     cursor.execute("UPDATE Bookings SET booking_status = 'Checked-in' WHERE id = ?;", (booking_id,))
     cursor.execute("UPDATE Rooms SET status = 'Occupied' WHERE id = ?;", (room_id,))
 
+    # Auto-issue active guest RFID keycard for arrival
+    try:
+        ensure_keycards_tables(conn)
+        cursor.execute("SELECT id FROM Keycards WHERE booking_id = ? AND status = 'Active';", (booking_id,))
+        existing_card = cursor.fetchone()
+        if not existing_card:
+            cursor.execute("SELECT first_name, last_name FROM Guests WHERE id = ?;", (booking["guest_id"],))
+            g_row = cursor.fetchone()
+            holder = f"{g_row['first_name']} {g_row['last_name']}" if g_row else "Hotel Guest"
+            cursor.execute("SELECT room_number FROM Rooms WHERE id = ?;", (room_id,))
+            r_row = cursor.fetchone()
+            r_num = r_row["room_number"] if r_row else str(room_id)
+            card_uid = f"RFID-{r_num}-{booking_id:04d}"
+            cursor.execute(
+                """
+                INSERT INTO Keycards (card_uid, room_id, booking_id, holder_name, card_type, status, issued_by, notes)
+                VALUES (?, ?, ?, ?, 'Guest', 'Active', 'Front Desk Arrival Check-In', 'Auto-encoded guest keycard on check-in');
+                """,
+                (card_uid, room_id, booking_id, holder),
+            )
+    except Exception as e:
+        print(f"Keycard auto-issue note on check-in: {e}")
+
     record_audit_log(
         conn,
         action="CHECK_IN",
@@ -2103,6 +2140,23 @@ def check_out_booking(
 
     cursor.execute("UPDATE FolioCharges SET status = 'Paid' WHERE booking_id = ? AND status = 'Billed';", (booking_id,))
 
+    # Auto-revoke active keycards for departing booking
+    try:
+        ensure_keycards_tables(conn)
+        now_iso = datetime.now(timezone.utc).isoformat()
+        cursor.execute(
+            """
+            UPDATE Keycards
+            SET status = 'Revoked',
+                revoked_at = ?,
+                revoked_reason = 'Guest Checked Out (Automatic departure deactivation)'
+            WHERE booking_id = ? AND status = 'Active';
+            """,
+            (now_iso, booking_id),
+        )
+    except Exception as e:
+        print(f"Keycards checkout revocation note: {e}")
+
     record_audit_log(
         conn,
         action="CHECK_OUT",
@@ -2121,7 +2175,6 @@ def check_out_booking(
     )
     conn.commit()
 
-    from datetime import datetime, timezone
     checkout_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
 
     return BookingCheckoutResponse(
@@ -4369,6 +4422,654 @@ def update_housekeeping_task(
     )
     row = cursor.fetchone()
     return row_to_housekeeping_task_response(row)
+
+
+# ==============================================================================
+# Module 5: Room Keycard / Access Control & Security Logging
+# ==============================================================================
+
+def ensure_keycards_tables(conn: sqlite3.Connection):
+    """Guarantees Keycards and AccessLogs tables and indexes exist in SQLite / PostgreSQL."""
+    cursor = conn.cursor()
+    if not IS_POSTGRES:
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS Keycards (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            card_uid TEXT NOT NULL UNIQUE,
+            room_id INTEGER DEFAULT NULL,
+            booking_id INTEGER DEFAULT NULL,
+            holder_name TEXT NOT NULL,
+            card_type TEXT NOT NULL DEFAULT 'Guest' CHECK(card_type IN ('Guest', 'Staff Master', 'Maintenance', 'Housekeeping', 'Emergency Override')),
+            status TEXT NOT NULL DEFAULT 'Active' CHECK(status IN ('Active', 'Suspended', 'Revoked', 'Expired')),
+            issued_by TEXT NOT NULL DEFAULT 'Front Desk Encoder',
+            notes TEXT DEFAULT '',
+            issued_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            expires_at TIMESTAMP DEFAULT NULL,
+            revoked_at TIMESTAMP DEFAULT NULL,
+            revoked_reason TEXT DEFAULT NULL,
+            FOREIGN KEY (room_id) REFERENCES Rooms(id) ON DELETE SET NULL,
+            FOREIGN KEY (booking_id) REFERENCES Bookings(id) ON DELETE SET NULL
+        );
+        """)
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS AccessLogs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            card_uid TEXT NOT NULL,
+            room_id INTEGER NOT NULL,
+            reader_location TEXT NOT NULL DEFAULT 'Room Exterior Lock',
+            event_type TEXT NOT NULL CHECK(event_type IN ('Granted', 'Denied - Expired', 'Denied - Invalid Room', 'Denied - Card Revoked', 'Denied - Card Suspended', 'Denied - Room Locked Out')),
+            access_granted INTEGER NOT NULL DEFAULT 0,
+            attempted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (room_id) REFERENCES Rooms(id) ON DELETE CASCADE
+        );
+        """)
+        conn.commit()
+    else:
+        try:
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS Keycards (
+                id SERIAL PRIMARY KEY,
+                card_uid VARCHAR(100) NOT NULL UNIQUE,
+                room_id INTEGER REFERENCES Rooms(id) ON DELETE SET NULL,
+                booking_id INTEGER REFERENCES Bookings(id) ON DELETE SET NULL,
+                holder_name VARCHAR(150) NOT NULL,
+                card_type VARCHAR(50) NOT NULL DEFAULT 'Guest',
+                status VARCHAR(50) NOT NULL DEFAULT 'Active',
+                issued_by VARCHAR(100) NOT NULL DEFAULT 'Front Desk Encoder',
+                notes TEXT DEFAULT '',
+                issued_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                expires_at TIMESTAMPTZ DEFAULT NULL,
+                revoked_at TIMESTAMPTZ DEFAULT NULL,
+                revoked_reason VARCHAR(255) DEFAULT NULL
+            );
+            """)
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS AccessLogs (
+                id SERIAL PRIMARY KEY,
+                card_uid VARCHAR(100) NOT NULL,
+                room_id INTEGER NOT NULL REFERENCES Rooms(id) ON DELETE CASCADE,
+                reader_location VARCHAR(150) NOT NULL DEFAULT 'Room Exterior Lock',
+                event_type VARCHAR(50) NOT NULL,
+                access_granted BOOLEAN NOT NULL DEFAULT FALSE,
+                attempted_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            );
+            """)
+            conn.commit()
+
+            cursor.execute("SELECT COUNT(*) as cnt FROM Keycards;")
+            row = cursor.fetchone()
+            cnt = int(row["cnt"] if isinstance(row, dict) and "cnt" in row else (row[0] if row else 0))
+            if cnt == 0:
+                sample_cards = [
+                    ("RFID-101A-8821", 1, 1, "Alexander Pierce", "Guest", "Active", "Front Desk Encoder", "Primary guest keycard", None, None, None),
+                    ("RFID-201A-4432", 3, 2, "Sophia Laurent", "Guest", "Active", "Front Desk Encoder", "Primary guest keycard", None, None, None),
+                    ("RFID-MASTER-001", None, None, "Sarah Jenkins (GM)", "Staff Master", "Active", "Security Admin", "Master bypass key for Executive General Manager", None, None, None),
+                    ("RFID-HK-002", None, None, "Maria Santos", "Housekeeping", "Active", "Housekeeping Supervisor", "Attendant floor service key", None, None, None),
+                    ("RFID-101A-7700", 1, 1, "Alexander Pierce", "Guest", "Revoked", "Front Desk Encoder", "Old keycard replaced due to misplacement", "2026-09-29 14:00:00", "2026-09-29 18:30:00", "Reported Lost by Guest; Replaced with RFID-101A-8821"),
+                ]
+                for c in sample_cards:
+                    cursor.execute("""
+                    INSERT INTO Keycards (card_uid, room_id, booking_id, holder_name, card_type, status, issued_by, notes, expires_at, revoked_at, revoked_reason)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+                    """, c)
+                sample_taps = [
+                    ("RFID-101A-8821", 1, "Room 101 Exterior Lock", "Granted", 1, "2026-10-01 10:15:00"),
+                    ("RFID-MASTER-001", 2, "Room 102 Exterior Lock", "Granted", 1, "2026-10-01 11:30:00"),
+                    ("RFID-101A-7700", 1, "Room 101 Exterior Lock", "Denied - Card Revoked", 0, "2026-10-01 11:45:00"),
+                    ("RFID-101A-8821", 2, "Room 102 Exterior Lock", "Denied - Invalid Room", 0, "2026-10-01 12:00:00"),
+                ]
+                for t in sample_taps:
+                    cursor.execute("""
+                    INSERT INTO AccessLogs (card_uid, room_id, reader_location, event_type, access_granted, attempted_at)
+                    VALUES (?, ?, ?, ?, ?, ?);
+                    """, (t[0], t[1], t[2], t[3], bool(t[4]), t[5]))
+                conn.commit()
+        except Exception as e:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            print(f"ensure_keycards_tables postgres error: {e}")
+
+
+def row_to_keycard_response(r) -> KeycardResponse:
+    keys = set(r.keys()) if hasattr(r, "keys") else set()
+
+    def _parse_card_type(val):
+        try:
+            return KeycardType(val)
+        except Exception:
+            return KeycardType.GUEST
+
+    def _parse_status(val):
+        try:
+            return KeycardStatus(val)
+        except Exception:
+            return KeycardStatus.ACTIVE
+
+    return KeycardResponse(
+        id=int(r["id"]),
+        card_uid=str(r["card_uid"]),
+        room_id=int(r["room_id"]) if "room_id" in keys and r["room_id"] is not None else None,
+        booking_id=int(r["booking_id"]) if "booking_id" in keys and r["booking_id"] is not None else None,
+        holder_name=str(r["holder_name"]),
+        card_type=_parse_card_type(r["card_type"] if "card_type" in keys else None),
+        status=_parse_status(r["status"] if "status" in keys else None),
+        issued_by=str(r["issued_by"]) if "issued_by" in keys and r["issued_by"] else "Front Desk Encoder",
+        notes=str(r["notes"]) if "notes" in keys and r["notes"] else "",
+        room_number=str(r["room_number"]) if "room_number" in keys and r["room_number"] is not None else None,
+        room_type=str(r["room_type"]) if "room_type" in keys and r["room_type"] is not None else None,
+        floor=int(r["floor"]) if "floor" in keys and r["floor"] is not None else None,
+        issued_at=str(r["issued_at"]) if "issued_at" in keys and r["issued_at"] else None,
+        expires_at=str(r["expires_at"]) if "expires_at" in keys and r["expires_at"] else None,
+        revoked_at=str(r["revoked_at"]) if "revoked_at" in keys and r["revoked_at"] else None,
+        revoked_reason=str(r["revoked_reason"]) if "revoked_reason" in keys and r["revoked_reason"] else None,
+    )
+
+
+def row_to_access_log_response(r) -> AccessLogResponse:
+    keys = set(r.keys()) if hasattr(r, "keys") else set()
+    return AccessLogResponse(
+        id=int(r["id"]),
+        card_uid=str(r["card_uid"]),
+        room_id=int(r["room_id"]),
+        room_number=str(r["room_number"]) if "room_number" in keys and r["room_number"] is not None else None,
+        holder_name=str(r["holder_name"]) if "holder_name" in keys and r["holder_name"] is not None else None,
+        card_type=str(r["card_type"]) if "card_type" in keys and r["card_type"] is not None else None,
+        reader_location=str(r["reader_location"]) if "reader_location" in keys and r["reader_location"] else "Room Exterior Lock",
+        event_type=str(r["event_type"]) if "event_type" in keys and r["event_type"] else "Granted",
+        access_granted=bool(r["access_granted"]) if "access_granted" in keys else False,
+        attempted_at=str(r["attempted_at"]) if "attempted_at" in keys and r["attempted_at"] else "",
+    )
+
+
+@app.get(
+    "/api/keycards",
+    response_model=List[KeycardResponse],
+    summary="List all issued keycard credentials with multi-filter query support",
+    tags=["Keycards & Access Control"],
+)
+def get_keycards(
+    status_filter: Optional[KeycardStatus] = Query(None, alias="status", description="Filter by keycard status"),
+    card_type: Optional[KeycardType] = Query(None, description="Filter by card category"),
+    room_id: Optional[int] = Query(None, description="Filter by assigned room ID"),
+    booking_id: Optional[int] = Query(None, description="Filter by booking folio ID"),
+    search: Optional[str] = Query(None, description="Search by holder name or card UID"),
+    conn: sqlite3.Connection = Depends(get_db),
+):
+    """Lists electronic keycards joined with room numbers and floors."""
+    ensure_keycards_tables(conn)
+    cursor = conn.cursor()
+
+    conditions = []
+    params = []
+
+    if status_filter:
+        conditions.append("k.status = ?")
+        params.append(status_filter.value)
+    if card_type:
+        conditions.append("k.card_type = ?")
+        params.append(card_type.value)
+    if room_id:
+        conditions.append("k.room_id = ?")
+        params.append(room_id)
+    if booking_id:
+        conditions.append("k.booking_id = ?")
+        params.append(booking_id)
+    if search:
+        s = f"%{search.strip()}%"
+        conditions.append("(k.holder_name LIKE ? OR k.card_uid LIKE ?)")
+        params.extend([s, s])
+
+    where_clause = (" WHERE " + " AND ".join(conditions)) if conditions else ""
+    query = f"""
+    SELECT k.*, r.room_number, r.room_type, r.floor
+    FROM Keycards k
+    LEFT JOIN Rooms r ON k.room_id = r.id
+    {where_clause}
+    ORDER BY k.id DESC;
+    """
+    if params:
+        cursor.execute(query, params)
+    else:
+        cursor.execute(query)
+    rows = cursor.fetchall()
+    return [row_to_keycard_response(r) for r in rows]
+
+
+@app.post(
+    "/api/keycards/issue",
+    response_model=KeycardResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Issue and encode a new electronic RFID/NFC keycard",
+    tags=["Keycards & Access Control"],
+)
+def issue_keycard(
+    payload: KeycardIssueRequest,
+    conn: sqlite3.Connection = Depends(get_db),
+):
+    """
+    Encodes and registers a new physical or virtual room keycard:
+    - Validates target room exists if room_id is specified
+    - Generates unique RFID hardware identifier if omitted
+    - Prevents duplicates on active card UIDs
+    - Records audit log entry KEYCARD_ISSUED
+    """
+    import random
+    ensure_keycards_tables(conn)
+    cursor = conn.cursor()
+
+    room_number = None
+    if payload.room_id is not None:
+        cursor.execute("SELECT id, room_number FROM Rooms WHERE id = ?;", (payload.room_id,))
+        room = cursor.fetchone()
+        if not room:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Room with ID {payload.room_id} not found.",
+            )
+        room_number = room["room_number"]
+
+    # Generate UID if omitted
+    if payload.card_uid and payload.card_uid.strip():
+        card_uid = payload.card_uid.strip()
+    else:
+        prefix = f"RFID-{room_number}" if room_number else f"RFID-{payload.card_type.value[:3].upper()}"
+        suffix = random.randint(1000, 9999)
+        card_uid = f"{prefix}-{suffix}"
+
+    # Verify uniqueness
+    cursor.execute("SELECT id FROM Keycards WHERE card_uid = ?;", (card_uid,))
+    if cursor.fetchone():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Keycard with UID '{card_uid}' already exists in registry.",
+        )
+
+    issued_by = payload.issued_by or "Front Desk Encoder"
+    cursor.execute(
+        """
+        INSERT INTO Keycards (card_uid, room_id, booking_id, holder_name, card_type, status, issued_by, notes, expires_at)
+        VALUES (?, ?, ?, ?, ?, 'Active', ?, ?, ?);
+        """,
+        (
+            card_uid,
+            payload.room_id,
+            payload.booking_id,
+            payload.holder_name.strip(),
+            payload.card_type.value,
+            issued_by,
+            payload.notes.strip() if payload.notes else "",
+            payload.expires_at,
+        ),
+    )
+    new_card_id = cursor.lastrowid
+
+    record_audit_log(
+        conn,
+        action="KEYCARD_ISSUED",
+        entity_type="Keycard",
+        entity_id=new_card_id,
+        details={
+            "card_uid": card_uid,
+            "holder_name": payload.holder_name.strip(),
+            "card_type": payload.card_type.value,
+            "room_id": payload.room_id,
+            "room_number": room_number,
+            "issued_by": issued_by,
+        },
+        actor=issued_by,
+    )
+    conn.commit()
+
+    cursor.execute(
+        """
+        SELECT k.*, r.room_number, r.room_type, r.floor
+        FROM Keycards k
+        LEFT JOIN Rooms r ON k.room_id = r.id
+        WHERE k.id = ?;
+        """,
+        (new_card_id,),
+    )
+    row = cursor.fetchone()
+    return row_to_keycard_response(row)
+
+
+@app.post(
+    "/api/keycards/{card_id}/revoke",
+    response_model=KeycardResponse,
+    summary="Immediately revoke or decommission a lost/stolen keycard",
+    tags=["Keycards & Access Control"],
+)
+def revoke_keycard(
+    card_id: int,
+    payload: KeycardRevokeRequest,
+    conn: sqlite3.Connection = Depends(get_db),
+):
+    """
+    Deactivates a keycard credential immediately:
+    - Sets status to 'Revoked'
+    - Records timestamp and reason
+    - Logs audit trail entry KEYCARD_REVOKED
+    """
+    ensure_keycards_tables(conn)
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT id, card_uid, room_id, holder_name, status FROM Keycards WHERE id = ?;", (card_id,))
+    card = cursor.fetchone()
+    if not card:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Keycard with ID {card_id} does not exist.",
+        )
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    revoked_by = payload.revoked_by or "Security Officer"
+
+    cursor.execute(
+        """
+        UPDATE Keycards
+        SET status = 'Revoked',
+            revoked_at = ?,
+            revoked_reason = ?
+        WHERE id = ?;
+        """,
+        (now_iso, payload.reason.strip(), card_id),
+    )
+
+    record_audit_log(
+        conn,
+        action="KEYCARD_REVOKED",
+        entity_type="Keycard",
+        entity_id=card_id,
+        details={
+            "card_uid": card["card_uid"],
+            "holder_name": card["holder_name"],
+            "reason": payload.reason.strip(),
+            "revoked_by": revoked_by,
+        },
+        actor=revoked_by,
+    )
+    conn.commit()
+
+    cursor.execute(
+        """
+        SELECT k.*, r.room_number, r.room_type, r.floor
+        FROM Keycards k
+        LEFT JOIN Rooms r ON k.room_id = r.id
+        WHERE k.id = ?;
+        """,
+        (card_id,),
+    )
+    row = cursor.fetchone()
+    return row_to_keycard_response(row)
+
+
+@app.post(
+    "/api/access-control/tap",
+    response_model=DoorTapResponse,
+    summary="Simulate an RFID reader lock tap event and record audit log",
+    tags=["Keycards & Access Control"],
+)
+def tap_door_lock(
+    payload: DoorTapRequest,
+    conn: sqlite3.Connection = Depends(get_db),
+):
+    """
+    Evaluates physical lock reader verification when an RFID credential is presented:
+    - Validates target room exists (404)
+    - Verifies card exists in registry (Denied - Invalid Room if unknown)
+    - Verifies card is not Revoked, Suspended, or Expired
+    - Verifies room is not locked out in Maintenance
+    - Verifies room permission:
+        - Master / Emergency / Staff keys grant access to any room
+        - Guest keys grant access only to their assigned room
+    - Inserts event into AccessLogs table
+    - Returns verdict with message and timestamp
+    """
+    ensure_keycards_tables(conn)
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT id, room_number, status FROM Rooms WHERE id = ?;", (payload.room_id,))
+    room = cursor.fetchone()
+    if not room:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Target room with ID {payload.room_id} does not exist.",
+        )
+    room_number = room["room_number"]
+
+    cursor.execute("SELECT * FROM Keycards WHERE card_uid = ?;", (payload.card_uid.strip(),))
+    card = cursor.fetchone()
+
+    now_dt = datetime.now(timezone.utc)
+    now_iso = now_dt.isoformat()
+    reader_loc = payload.reader_location or f"Room {room_number} Exterior Lock"
+
+    access_granted = False
+    event_type = AccessEventType.DENIED_INVALID_ROOM
+    message = "Access Denied: Unrecognized keycard credential."
+    holder_name = None
+    card_type_enum = None
+
+    if not card:
+        access_granted = False
+        event_type = AccessEventType.DENIED_INVALID_ROOM
+        message = "Access Denied: Card UID not registered in hotel system."
+    else:
+        holder_name = card["holder_name"]
+        try:
+            card_type_enum = KeycardType(card["card_type"])
+        except Exception:
+            card_type_enum = KeycardType.GUEST
+
+        card_keys = set(card.keys()) if hasattr(card, "keys") else set()
+        card_status = card["status"]
+        rev_reason = card["revoked_reason"] if "revoked_reason" in card_keys else None
+        expires_at_val = card["expires_at"] if "expires_at" in card_keys else None
+
+        if card_status == "Revoked":
+            access_granted = False
+            event_type = AccessEventType.DENIED_REVOKED
+            message = f"Access Denied: Keycard is revoked ({rev_reason or 'Decommissioned'})."
+        elif card_status == "Suspended":
+            access_granted = False
+            event_type = AccessEventType.DENIED_SUSPENDED
+            message = "Access Denied: Keycard is temporarily suspended."
+        elif expires_at_val:
+            try:
+                exp_dt = datetime.fromisoformat(str(expires_at_val).replace("Z", "+00:00"))
+                if exp_dt.tzinfo is None:
+                    exp_dt = exp_dt.replace(tzinfo=timezone.utc)
+                if now_dt > exp_dt:
+                    access_granted = False
+                    event_type = AccessEventType.DENIED_EXPIRED
+                    message = "Access Denied: Keycard validity period has expired."
+            except Exception:
+                pass
+
+        if event_type == AccessEventType.DENIED_INVALID_ROOM and card_status == "Active":
+            # Check room maintenance lock out
+            if room["status"] == "Maintenance" and card_type_enum == KeycardType.GUEST:
+                access_granted = False
+                event_type = AccessEventType.DENIED_LOCKED_OUT
+                message = f"Access Denied: Room {room_number} is out of service for maintenance."
+            elif card_type_enum in (KeycardType.STAFF_MASTER, KeycardType.EMERGENCY):
+                access_granted = True
+                event_type = AccessEventType.GRANTED
+                message = f"Access Granted: Master override unlocked Room {room_number}."
+            elif card_type_enum in (KeycardType.HOUSEKEEPING, KeycardType.MAINTENANCE):
+                access_granted = True
+                event_type = AccessEventType.GRANTED
+                message = f"Access Granted: Staff service access to Room {room_number}."
+            elif card_type_enum == KeycardType.GUEST:
+                if card["room_id"] == payload.room_id:
+                    access_granted = True
+                    event_type = AccessEventType.GRANTED
+                    message = f"Access Granted: Welcome to Room {room_number}, {holder_name}."
+                else:
+                    access_granted = False
+                    event_type = AccessEventType.DENIED_INVALID_ROOM
+                    message = f"Access Denied: Card is authorized for a different room, not Room {room_number}."
+
+    # Record in AccessLogs
+    cursor.execute(
+        """
+        INSERT INTO AccessLogs (card_uid, room_id, reader_location, event_type, access_granted, attempted_at)
+        VALUES (?, ?, ?, ?, ?, ?);
+        """,
+        (
+            payload.card_uid.strip(),
+            payload.room_id,
+            reader_loc,
+            event_type.value,
+            1 if access_granted else 0,
+            now_iso,
+        ),
+    )
+
+    if not access_granted:
+        record_audit_log(
+            conn,
+            action="DOOR_ACCESS_DENIED",
+            entity_type="Room",
+            entity_id=payload.room_id,
+            details={
+                "card_uid": payload.card_uid.strip(),
+                "room_number": room_number,
+                "event_type": event_type.value,
+                "message": message,
+                "reader_location": reader_loc,
+            },
+            actor=holder_name or "Unknown Presenter",
+        )
+    conn.commit()
+
+    return DoorTapResponse(
+        access_granted=access_granted,
+        event_type=event_type,
+        card_uid=payload.card_uid.strip(),
+        room_id=payload.room_id,
+        room_number=room_number,
+        holder_name=holder_name,
+        card_type=card_type_enum,
+        message=message,
+        timestamp=now_iso,
+    )
+
+
+@app.get(
+    "/api/access-control/logs",
+    response_model=List[AccessLogResponse],
+    summary="List physical lock access tap audit entries",
+    tags=["Keycards & Access Control"],
+)
+def get_access_logs(
+    room_id: Optional[int] = Query(None, description="Filter by room ID"),
+    card_uid: Optional[str] = Query(None, description="Filter by card UID"),
+    event_type: Optional[str] = Query(None, description="Filter by event outcome (e.g. Granted, Denied)"),
+    limit: int = Query(50, ge=1, le=500, description="Max logs to return"),
+    conn: sqlite3.Connection = Depends(get_db),
+):
+    """Returns access control audit records joined with room and cardholder metadata."""
+    ensure_keycards_tables(conn)
+    cursor = conn.cursor()
+
+    conditions = []
+    params = []
+
+    if room_id:
+        conditions.append("a.room_id = ?")
+        params.append(room_id)
+    if card_uid:
+        conditions.append("a.card_uid = ?")
+        params.append(card_uid.strip())
+    if event_type:
+        conditions.append("a.event_type LIKE ?")
+        params.append(f"%{event_type.strip()}%")
+
+    where_clause = (" WHERE " + " AND ".join(conditions)) if conditions else ""
+    query = f"""
+    SELECT a.*, r.room_number, k.holder_name, k.card_type
+    FROM AccessLogs a
+    LEFT JOIN Rooms r ON a.room_id = r.id
+    LEFT JOIN Keycards k ON a.card_uid = k.card_uid
+    {where_clause}
+    ORDER BY a.id DESC
+    LIMIT {int(limit)};
+    """
+    if params:
+        cursor.execute(query, params)
+    else:
+        cursor.execute(query)
+    rows = cursor.fetchall()
+    return [row_to_access_log_response(r) for r in rows]
+
+
+@app.get(
+    "/api/access-control/dashboard",
+    response_model=AccessControlDashboardResponse,
+    summary="Get access control security KPI metrics and intrusion alerts",
+    tags=["Keycards & Access Control"],
+)
+def get_access_control_dashboard(conn: sqlite3.Connection = Depends(get_db)):
+    """Aggregates active credentials, master cards, and daily access outcomes."""
+    ensure_keycards_tables(conn)
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT COUNT(*) as cnt FROM Keycards WHERE status = 'Active';")
+    row = cursor.fetchone()
+    total_active_cards = int(row["cnt"] if isinstance(row, dict) and "cnt" in row else (row[0] if row else 0))
+
+    cursor.execute("SELECT COUNT(*) as cnt FROM Keycards WHERE status = 'Active' AND card_type = 'Guest';")
+    row = cursor.fetchone()
+    guest_cards_active = int(row["cnt"] if isinstance(row, dict) and "cnt" in row else (row[0] if row else 0))
+
+    cursor.execute("SELECT COUNT(*) as cnt FROM Keycards WHERE status = 'Active' AND card_type IN ('Staff Master', 'Housekeeping', 'Maintenance', 'Emergency Override');")
+    row = cursor.fetchone()
+    staff_master_cards = int(row["cnt"] if isinstance(row, dict) and "cnt" in row else (row[0] if row else 0))
+
+    cursor.execute("SELECT COUNT(*) as cnt FROM Keycards WHERE status = 'Revoked';")
+    row = cursor.fetchone()
+    revoked_cards_count = int(row["cnt"] if isinstance(row, dict) and "cnt" in row else (row[0] if row else 0))
+
+    cursor.execute("SELECT COUNT(*) as cnt FROM AccessLogs;")
+    row = cursor.fetchone()
+    total_access_taps_today = int(row["cnt"] if isinstance(row, dict) and "cnt" in row else (row[0] if row else 0))
+
+    cursor.execute("SELECT COUNT(*) as cnt FROM AccessLogs WHERE access_granted = 1 OR access_granted IS TRUE;")
+    row = cursor.fetchone()
+    granted_taps_today = int(row["cnt"] if isinstance(row, dict) and "cnt" in row else (row[0] if row else 0))
+
+    cursor.execute("SELECT COUNT(*) as cnt FROM AccessLogs WHERE access_granted = 0 OR access_granted IS FALSE;")
+    row = cursor.fetchone()
+    denied_intrusions_today = int(row["cnt"] if isinstance(row, dict) and "cnt" in row else (row[0] if row else 0))
+
+    # 5 most recent denied events
+    cursor.execute(
+        """
+        SELECT a.*, r.room_number, k.holder_name, k.card_type
+        FROM AccessLogs a
+        LEFT JOIN Rooms r ON a.room_id = r.id
+        LEFT JOIN Keycards k ON a.card_uid = k.card_uid
+        WHERE a.access_granted = 0 OR a.access_granted IS FALSE
+        ORDER BY a.id DESC
+        LIMIT 5;
+        """
+    )
+    denied_rows = cursor.fetchall()
+    recent_denied_events = [row_to_access_log_response(r) for r in denied_rows]
+
+    return AccessControlDashboardResponse(
+        total_active_cards=total_active_cards,
+        guest_cards_active=guest_cards_active,
+        staff_master_cards=staff_master_cards,
+        revoked_cards_count=revoked_cards_count,
+        total_access_taps_today=total_access_taps_today,
+        granted_taps_today=granted_taps_today,
+        denied_intrusions_today=denied_intrusions_today,
+        recent_denied_events=recent_denied_events,
+    )
 
 
 # Mount static files if directory exists (local development fallback)

@@ -829,5 +829,129 @@ class HousekeepingSummaryResponse(BaseModel):
     active_housekeepers: List[str]
 
 
+# ==============================================================================
+# Module 5: Room Keycard / Access Control & Security Logging
+# ==============================================================================
+
+class KeycardType(str, Enum):
+    """Classification of RFID/NFC keycards."""
+    GUEST = "Guest"
+    STAFF_MASTER = "Staff Master"
+    MAINTENANCE = "Maintenance"
+    HOUSEKEEPING = "Housekeeping"
+    EMERGENCY = "Emergency Override"
+
+
+class KeycardStatus(str, Enum):
+    """Operational status of a physical keycard."""
+    ACTIVE = "Active"
+    SUSPENDED = "Suspended"
+    REVOKED = "Revoked"
+    EXPIRED = "Expired"
+
+
+class AccessEventType(str, Enum):
+    """Reader lock tap event verdict."""
+    GRANTED = "Granted"
+    DENIED_EXPIRED = "Denied - Expired"
+    DENIED_INVALID_ROOM = "Denied - Invalid Room"
+    DENIED_REVOKED = "Denied - Card Revoked"
+    DENIED_SUSPENDED = "Denied - Card Suspended"
+    DENIED_LOCKED_OUT = "Denied - Room Locked Out"
+
+
+class KeycardBase(BaseModel):
+    """Core attributes of an access credential."""
+    card_uid: str = Field(..., description="Unique RFID / NFC tag UID (e.g. RFID-8821-B3)")
+    room_id: Optional[int] = Field(None, description="Assigned room ID (None for Master Keys)")
+    booking_id: Optional[int] = Field(None, description="Linked booking ID for guest keys")
+    holder_name: str = Field(..., description="Authorized cardholder name")
+    card_type: KeycardType = Field(default=KeycardType.GUEST, description="Keycard authorization level")
+    status: KeycardStatus = Field(default=KeycardStatus.ACTIVE, description="Card lifecycle state")
+    issued_by: str = Field(default="Front Desk Encoder", description="Issuing clerk or station")
+    notes: Optional[str] = Field(default="", description="Operational security notes")
+
+
+class KeycardIssueRequest(BaseModel):
+    """Payload to issue / encode a new keycard."""
+    room_id: Optional[int] = Field(None, description="Target room ID (required for Guest keys)")
+    booking_id: Optional[int] = Field(None, description="Optional booking reference")
+    holder_name: str = Field(..., min_length=2, max_length=120, description="Guest or employee name")
+    card_type: KeycardType = Field(default=KeycardType.GUEST, description="Authorization tier")
+    card_uid: Optional[str] = Field(None, description="Optional hardware UID; generated if omitted")
+    expires_at: Optional[str] = Field(None, description="ISO expiration timestamp (defaults to stay checkout or +30d)")
+    issued_by: Optional[str] = Field(default="Front Desk Encoder", description="Issuing user or kiosk")
+    notes: Optional[str] = Field(default="", description="Notes or security clearance remarks")
+
+
+class KeycardRevokeRequest(BaseModel):
+    """Payload to revoke or mark a card lost."""
+    reason: str = Field(..., min_length=3, max_length=200, description="Reason for revocation (e.g. Card Lost, Guest Checked Out)")
+    revoked_by: Optional[str] = Field(default="Security Officer", description="Staff actor")
+
+
+class KeycardResponse(KeycardBase):
+    """Complete keycard credential record."""
+    id: int
+    room_number: Optional[str] = None
+    room_type: Optional[str] = None
+    floor: Optional[int] = None
+    issued_at: Optional[str] = None
+    expires_at: Optional[str] = None
+    revoked_at: Optional[str] = None
+    revoked_reason: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class DoorTapRequest(BaseModel):
+    """Payload to simulate a reader lock tap attempt at a door lock."""
+    card_uid: str = Field(..., description="Scanned card RFID UID")
+    room_id: int = Field(..., description="Target room lock reader")
+    reader_location: Optional[str] = Field(default="Room Exterior Lock", description="Lock location description")
+
+
+class DoorTapResponse(BaseModel):
+    """Security verification result for a door lock tap."""
+    access_granted: bool
+    event_type: AccessEventType
+    card_uid: str
+    room_id: int
+    room_number: Optional[str] = None
+    holder_name: Optional[str] = None
+    card_type: Optional[KeycardType] = None
+    message: str
+    timestamp: str
+
+
+class AccessLogResponse(BaseModel):
+    """Audit log entry for an access control tap event."""
+    id: int
+    card_uid: str
+    room_id: int
+    room_number: Optional[str] = None
+    holder_name: Optional[str] = None
+    card_type: Optional[str] = None
+    reader_location: str
+    event_type: str
+    access_granted: bool
+    attempted_at: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AccessControlDashboardResponse(BaseModel):
+    """Executive KPI strip for hotel access security."""
+    total_active_cards: int
+    guest_cards_active: int
+    staff_master_cards: int
+    revoked_cards_count: int
+    total_access_taps_today: int
+    granted_taps_today: int
+    denied_intrusions_today: int
+    recent_denied_events: List[AccessLogResponse]
+
+
+
 
 

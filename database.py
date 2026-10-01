@@ -535,6 +535,41 @@ def init_db() -> None:
     );
     """)
 
+    # Table 11: Keycards (Module 5: Room Keycards & Credential Lifecycle)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS Keycards (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        card_uid TEXT NOT NULL UNIQUE,
+        room_id INTEGER DEFAULT NULL,
+        booking_id INTEGER DEFAULT NULL,
+        holder_name TEXT NOT NULL,
+        card_type TEXT NOT NULL DEFAULT 'Guest' CHECK(card_type IN ('Guest', 'Staff Master', 'Maintenance', 'Housekeeping', 'Emergency Override')),
+        status TEXT NOT NULL DEFAULT 'Active' CHECK(status IN ('Active', 'Suspended', 'Revoked', 'Expired')),
+        issued_by TEXT NOT NULL DEFAULT 'Front Desk Encoder',
+        notes TEXT DEFAULT '',
+        issued_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        expires_at TIMESTAMP DEFAULT NULL,
+        revoked_at TIMESTAMP DEFAULT NULL,
+        revoked_reason TEXT DEFAULT NULL,
+        FOREIGN KEY (room_id) REFERENCES Rooms(id) ON DELETE SET NULL,
+        FOREIGN KEY (booking_id) REFERENCES Bookings(id) ON DELETE SET NULL
+    );
+    """)
+
+    # Table 12: AccessLogs (Module 5: Door Reader Taps & Access Audits)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS AccessLogs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        card_uid TEXT NOT NULL,
+        room_id INTEGER NOT NULL,
+        reader_location TEXT NOT NULL DEFAULT 'Room Exterior Lock',
+        event_type TEXT NOT NULL CHECK(event_type IN ('Granted', 'Denied - Expired', 'Denied - Invalid Room', 'Denied - Card Revoked', 'Denied - Card Suspended', 'Denied - Room Locked Out')),
+        access_granted INTEGER NOT NULL DEFAULT 0,
+        attempted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (room_id) REFERENCES Rooms(id) ON DELETE CASCADE
+    );
+    """)
+
     conn.commit()
     conn.close()
     print("Database tables initialized successfully with foreign key enforcement.")
@@ -932,6 +967,103 @@ def seed_housekeeping_tasks() -> None:
     conn.close()
 
 
+def seed_keycards() -> None:
+    """
+    Seeds initial keycards and door reader access tap events.
+    Supports both SQLite and PostgreSQL.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    sample_cards = [
+        ("RFID-101A-8821", 1, 1, "Alexander Pierce", "Guest", "Active", "Front Desk Encoder", "Primary guest keycard", None, None, None),
+        ("RFID-201A-4432", 3, 2, "Sophia Laurent", "Guest", "Active", "Front Desk Encoder", "Primary guest keycard", None, None, None),
+        ("RFID-MASTER-001", None, None, "Sarah Jenkins (GM)", "Staff Master", "Active", "Security Admin", "Master bypass key for Executive General Manager", None, None, None),
+        ("RFID-HK-002", None, None, "Maria Santos", "Housekeeping", "Active", "Housekeeping Supervisor", "Attendant floor service key", None, None, None),
+        ("RFID-101A-7700", 1, 1, "Alexander Pierce", "Guest", "Revoked", "Front Desk Encoder", "Old keycard replaced due to misplacement", "2026-09-29 14:00:00", "2026-09-29 18:30:00", "Reported Lost by Guest; Replaced with RFID-101A-8821"),
+    ]
+
+    sample_taps = [
+        ("RFID-101A-8821", 1, "Room 101 Exterior Lock", "Granted", 1, "2026-10-01 10:15:00"),
+        ("RFID-MASTER-001", 2, "Room 102 Exterior Lock", "Granted", 1, "2026-10-01 11:30:00"),
+        ("RFID-101A-7700", 1, "Room 101 Exterior Lock", "Denied - Card Revoked", 0, "2026-10-01 11:45:00"),
+        ("RFID-101A-8821", 2, "Room 102 Exterior Lock", "Denied - Invalid Room", 0, "2026-10-01 12:00:00"),
+    ]
+
+    if not IS_POSTGRES:
+        cursor.execute("SELECT COUNT(*) as cnt FROM Keycards;")
+        row = cursor.fetchone()
+        cnt = row["cnt"] if row else 0
+        if cnt == 0:
+            for c in sample_cards:
+                cursor.execute("""
+                INSERT INTO Keycards (card_uid, room_id, booking_id, holder_name, card_type, status, issued_by, notes, expires_at, revoked_at, revoked_reason)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+                """, c)
+            for t in sample_taps:
+                cursor.execute("""
+                INSERT INTO AccessLogs (card_uid, room_id, reader_location, event_type, access_granted, attempted_at)
+                VALUES (?, ?, ?, ?, ?, ?);
+                """, t)
+            conn.commit()
+            print("Keycards & AccessLogs seeded (SQLite).")
+    else:
+        try:
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS Keycards (
+                id SERIAL PRIMARY KEY,
+                card_uid VARCHAR(100) NOT NULL UNIQUE,
+                room_id INTEGER REFERENCES Rooms(id) ON DELETE SET NULL,
+                booking_id INTEGER REFERENCES Bookings(id) ON DELETE SET NULL,
+                holder_name VARCHAR(150) NOT NULL,
+                card_type VARCHAR(50) NOT NULL DEFAULT 'Guest',
+                status VARCHAR(50) NOT NULL DEFAULT 'Active',
+                issued_by VARCHAR(100) NOT NULL DEFAULT 'Front Desk Encoder',
+                notes TEXT DEFAULT '',
+                issued_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                expires_at TIMESTAMPTZ DEFAULT NULL,
+                revoked_at TIMESTAMPTZ DEFAULT NULL,
+                revoked_reason VARCHAR(255) DEFAULT NULL
+            );
+            """)
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS AccessLogs (
+                id SERIAL PRIMARY KEY,
+                card_uid VARCHAR(100) NOT NULL,
+                room_id INTEGER NOT NULL REFERENCES Rooms(id) ON DELETE CASCADE,
+                reader_location VARCHAR(150) NOT NULL DEFAULT 'Room Exterior Lock',
+                event_type VARCHAR(50) NOT NULL,
+                access_granted BOOLEAN NOT NULL DEFAULT FALSE,
+                attempted_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            );
+            """)
+            conn.commit()
+
+            cursor.execute("SELECT COUNT(*) as cnt FROM Keycards;")
+            row = cursor.fetchone()
+            cnt = row["cnt"] if row and "cnt" in row.keys() else 0
+            if cnt == 0:
+                for c in sample_cards:
+                    cursor.execute("""
+                    INSERT INTO Keycards (card_uid, room_id, booking_id, holder_name, card_type, status, issued_by, notes, expires_at, revoked_at, revoked_reason)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+                    """, c)
+                for t in sample_taps:
+                    cursor.execute("""
+                    INSERT INTO AccessLogs (card_uid, room_id, reader_location, event_type, access_granted, attempted_at)
+                    VALUES (?, ?, ?, ?, ?, ?);
+                    """, (t[0], t[1], t[2], t[3], bool(t[4]), t[5]))
+                conn.commit()
+                print("Keycards & AccessLogs seeded (PostgreSQL).")
+        except Exception as e:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            print(f"PostgreSQL Keycards seed note: {e}")
+    conn.close()
+
+
 if __name__ == "__main__":
     print(f"Target SQLite Database: {DATABASE_PATH}")
     init_db()
@@ -943,6 +1075,8 @@ if __name__ == "__main__":
     seed_maintenance_tickets()
     seed_folio_charges()
     seed_housekeeping_tasks()
+    seed_keycards()
+
 
 
 

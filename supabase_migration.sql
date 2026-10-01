@@ -288,3 +288,61 @@ INSERT INTO public.housekeepingtasks (room_id, task_type, priority, status, assi
 (4, 'Stayover Clean', 'Normal', 'In Progress', 'David Kim', 1, 0, 0, 'Replace extra towels and restock espresso pods.'),
 (1, 'Inspection Audit', 'Normal', 'Inspected', 'Elena Rostova', 1, 1, 1, 'Passed 5-star quality sanitation audit.')
 ON CONFLICT DO NOTHING;
+
+-- ==============================================================================
+-- Module 5: Room Keycard / Access Control & Security Logging
+-- ==============================================================================
+
+-- Table 11: keycards (RFID / NFC Credentials & Access Permissions)
+CREATE TABLE IF NOT EXISTS public.keycards (
+    id SERIAL PRIMARY KEY,
+    card_uid VARCHAR(100) NOT NULL UNIQUE,
+    room_id INTEGER REFERENCES public.rooms(id) ON DELETE SET NULL,
+    booking_id INTEGER REFERENCES public.bookings(id) ON DELETE SET NULL,
+    holder_name VARCHAR(150) NOT NULL,
+    card_type VARCHAR(50) NOT NULL DEFAULT 'Guest',
+    status VARCHAR(50) NOT NULL DEFAULT 'Active',
+    issued_by VARCHAR(100) NOT NULL DEFAULT 'Front Desk Encoder',
+    notes TEXT DEFAULT '',
+    issued_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMPTZ DEFAULT NULL,
+    revoked_at TIMESTAMPTZ DEFAULT NULL,
+    revoked_reason VARCHAR(255) DEFAULT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_keycards_card_uid ON public.keycards (card_uid);
+CREATE INDEX IF NOT EXISTS idx_keycards_room_id ON public.keycards (room_id);
+CREATE INDEX IF NOT EXISTS idx_keycards_booking_id ON public.keycards (booking_id);
+CREATE INDEX IF NOT EXISTS idx_keycards_status ON public.keycards (status);
+
+-- Table 12: accesslogs (Electronic Reader Door Taps & Audit Trail)
+CREATE TABLE IF NOT EXISTS public.accesslogs (
+    id SERIAL PRIMARY KEY,
+    card_uid VARCHAR(100) NOT NULL,
+    room_id INTEGER NOT NULL REFERENCES public.rooms(id) ON DELETE CASCADE,
+    reader_location VARCHAR(150) NOT NULL DEFAULT 'Room Exterior Lock',
+    event_type VARCHAR(50) NOT NULL,
+    access_granted BOOLEAN NOT NULL DEFAULT FALSE,
+    attempted_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_accesslogs_room_id ON public.accesslogs (room_id);
+CREATE INDEX IF NOT EXISTS idx_accesslogs_card_uid ON public.accesslogs (card_uid);
+CREATE INDEX IF NOT EXISTS idx_accesslogs_attempted_at ON public.accesslogs (attempted_at DESC);
+
+-- 7. Initial Keycards Seed Data
+INSERT INTO public.keycards (card_uid, room_id, booking_id, holder_name, card_type, status, issued_by, notes, expires_at, revoked_at, revoked_reason) VALUES
+('RFID-101A-8821', 1, 1, 'Alexander Pierce', 'Guest', 'Active', 'Front Desk Encoder', 'Primary guest keycard', NULL, NULL, NULL),
+('RFID-201A-4432', 3, 2, 'Sophia Laurent', 'Guest', 'Active', 'Front Desk Encoder', 'Primary guest keycard', NULL, NULL, NULL),
+('RFID-MASTER-001', NULL, NULL, 'Sarah Jenkins (GM)', 'Staff Master', 'Active', 'Security Admin', 'Master bypass key for Executive General Manager', NULL, NULL, NULL),
+('RFID-HK-002', NULL, NULL, 'Maria Santos', 'Housekeeping', 'Active', 'Housekeeping Supervisor', 'Attendant floor service key', NULL, NULL, NULL),
+('RFID-101A-7700', 1, 1, 'Alexander Pierce', 'Guest', 'Revoked', 'Front Desk Encoder', 'Old keycard replaced due to misplacement', '2026-09-29 14:00:00+00', '2026-09-29 18:30:00+00', 'Reported Lost by Guest; Replaced with RFID-101A-8821')
+ON CONFLICT (card_uid) DO NOTHING;
+
+-- 8. Initial Access Logs Seed Data
+INSERT INTO public.accesslogs (card_uid, room_id, reader_location, event_type, access_granted, attempted_at) VALUES
+('RFID-101A-8821', 1, 'Room 101 Exterior Lock', 'Granted', TRUE, '2026-10-01 10:15:00+00'),
+('RFID-MASTER-001', 2, 'Room 102 Exterior Lock', 'Granted', TRUE, '2026-10-01 11:30:00+00'),
+('RFID-101A-7700', 1, 'Room 101 Exterior Lock', 'Denied - Card Revoked', FALSE, '2026-10-01 11:45:00+00'),
+('RFID-101A-8821', 2, 'Room 102 Exterior Lock', 'Denied - Invalid Room', FALSE, '2026-10-01 12:00:00+00');
+

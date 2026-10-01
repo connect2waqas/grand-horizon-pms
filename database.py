@@ -126,8 +126,8 @@ class PostgresCursorWrapper:
         query = query.replace("strftime('%Y-%m', 'now')", "to_char(CURRENT_DATE, 'YYYY-MM')")
 
         is_insert = query.strip().upper().startswith("INSERT")
-        is_booking_amenities = "BOOKINGAMENITIES" in query.upper()
-        if is_insert and "RETURNING" not in query.upper() and not is_booking_amenities:
+        is_no_id_table = any(t in query.upper() for t in ["BOOKINGAMENITIES", "EXCHANGERATES"])
+        if is_insert and "RETURNING" not in query.upper() and not is_no_id_table:
             trimmed = query.rstrip().rstrip(";")
             returning_query = f"{trimmed} RETURNING id;"
             if params is not None:

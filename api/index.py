@@ -5128,6 +5128,36 @@ def ensure_finance_tables(conn: sqlite3.Connection):
         );
         """)
         conn.commit()
+
+        cursor.execute("SELECT COUNT(*) as cnt FROM ExchangeRates;")
+        row = cursor.fetchone()
+        cnt = row["cnt"] if row else 0
+        if cnt == 0:
+            seed_rates = [
+                ("USD", "US Dollar", "$", 1.0, 1),
+                ("EUR", "Euro", "€", 0.92, 0),
+                ("GBP", "British Pound", "£", 0.79, 0),
+                ("JPY", "Japanese Yen", "¥", 152.50, 0),
+                ("CAD", "Canadian Dollar", "C$", 1.38, 0),
+                ("AUD", "Australian Dollar", "A$", 1.52, 0),
+                ("CHF", "Swiss Franc", "CHF", 0.88, 0),
+            ]
+            for r in seed_rates:
+                cursor.execute(
+                    "INSERT INTO ExchangeRates (currency_code, currency_name, symbol, rate_to_usd, is_base) VALUES (?, ?, ?, ?, ?);",
+                    r,
+                )
+            seed_taxes = [
+                ("Standard Occupancy Sales Tax / VAT", "Percentage", 10.0, "USD", "All", 1),
+                ("City Tourism Municipal Surcharge", "Flat_Per_Night", 5.0, "USD", "Room_Only", 1),
+                ("Eco Sustainability & Green Resort Levy", "Flat_Per_Stay", 12.0, "USD", "All", 1),
+            ]
+            for t in seed_taxes:
+                cursor.execute(
+                    "INSERT INTO TaxRules (tax_name, tax_type, rate, currency_code, applies_to, is_active) VALUES (?, ?, ?, ?, ?, ?);",
+                    t,
+                )
+            conn.commit()
     else:
         try:
             cursor.execute("""
@@ -5153,6 +5183,43 @@ def ensure_finance_tables(conn: sqlite3.Connection):
             );
             """)
             conn.commit()
+
+            cursor.execute("SELECT COUNT(*) as cnt FROM ExchangeRates;")
+            row = cursor.fetchone()
+            cnt = int(row["cnt"] if isinstance(row, dict) and "cnt" in row else (row[0] if row else 0))
+            if cnt == 0:
+                seed_rates = [
+                    ("USD", "US Dollar", "$", 1.0, True),
+                    ("EUR", "Euro", "€", 0.92, False),
+                    ("GBP", "British Pound", "£", 0.79, False),
+                    ("JPY", "Japanese Yen", "¥", 152.50, False),
+                    ("CAD", "Canadian Dollar", "C$", 1.38, False),
+                    ("AUD", "Australian Dollar", "A$", 1.52, False),
+                    ("CHF", "Swiss Franc", "CHF", 0.88, False),
+                ]
+                for r in seed_rates:
+                    cursor.execute(
+                        """
+                        INSERT INTO ExchangeRates (currency_code, currency_name, symbol, rate_to_usd, is_base)
+                        VALUES (?, ?, ?, ?, ?)
+                        ON CONFLICT (currency_code) DO NOTHING;
+                        """,
+                        r,
+                    )
+                seed_taxes = [
+                    ("Standard Occupancy Sales Tax / VAT", "Percentage", 10.0, "USD", "All", True),
+                    ("City Tourism Municipal Surcharge", "Flat_Per_Night", 5.0, "USD", "Room_Only", True),
+                    ("Eco Sustainability & Green Resort Levy", "Flat_Per_Stay", 12.0, "USD", "All", True),
+                ]
+                for t in seed_taxes:
+                    cursor.execute(
+                        """
+                        INSERT INTO TaxRules (tax_name, tax_type, rate, currency_code, applies_to, is_active)
+                        VALUES (?, ?, ?, ?, ?, ?);
+                        """,
+                        t,
+                    )
+                conn.commit()
         except Exception as e:
             try:
                 conn.rollback()
@@ -5160,43 +5227,6 @@ def ensure_finance_tables(conn: sqlite3.Connection):
                 pass
             print(f"ensure_finance_tables postgres note: {e}")
 
-    # Ensure default records exist
-    cursor.execute("SELECT COUNT(*) as cnt FROM ExchangeRates;")
-    row = cursor.fetchone()
-    cnt = int(row["cnt"] if isinstance(row, dict) and "cnt" in row else (row[0] if row else 0))
-    if cnt == 0:
-        seed_rates = [
-            ("USD", "US Dollar", "$", 1.0, 1),
-            ("EUR", "Euro", "€", 0.92, 0),
-            ("GBP", "British Pound", "£", 0.79, 0),
-            ("JPY", "Japanese Yen", "¥", 152.50, 0),
-            ("CAD", "Canadian Dollar", "C$", 1.38, 0),
-            ("AUD", "Australian Dollar", "A$", 1.52, 0),
-            ("CHF", "Swiss Franc", "CHF", 0.88, 0),
-        ]
-        for r in seed_rates:
-            cursor.execute(
-                """
-                INSERT INTO ExchangeRates (currency_code, currency_name, symbol, rate_to_usd, is_base)
-                VALUES (?, ?, ?, ?, ?)
-                ON CONFLICT (currency_code) DO NOTHING;
-                """,
-                (r[0], r[1], r[2], r[3], bool(r[4]) if IS_POSTGRES else r[4]),
-            )
-        seed_taxes = [
-            ("Standard Occupancy Sales Tax / VAT", "Percentage", 10.0, "USD", "All", 1),
-            ("City Tourism Municipal Surcharge", "Flat_Per_Night", 5.0, "USD", "Room_Only", 1),
-            ("Eco Sustainability & Green Resort Levy", "Flat_Per_Stay", 12.0, "USD", "All", 1),
-        ]
-        for t in seed_taxes:
-            cursor.execute(
-                """
-                INSERT INTO TaxRules (tax_name, tax_type, rate, currency_code, applies_to, is_active)
-                VALUES (?, ?, ?, ?, ?, ?);
-                """,
-                (t[0], t[1], t[2], t[3], t[4], bool(t[5]) if IS_POSTGRES else t[5]),
-            )
-        conn.commit()
 
 
 def row_to_exchange_rate_response(r) -> ExchangeRateResponse:

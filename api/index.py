@@ -5662,7 +5662,7 @@ def ensure_room_operations_tables(conn: sqlite3.Connection):
     cursor = conn.cursor()
     if not IS_POSTGRES:
         cursor.execute("""
-        CREATE TABLE IF NOT EXISTS RoomLockouts (
+        CREATE TABLE IF NOT EXISTS roomlockouts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             room_id INTEGER NOT NULL,
             lockout_type TEXT NOT NULL DEFAULT 'Out_of_Order' CHECK(lockout_type IN ('Out_of_Order', 'Out_of_Service', 'Emergency_Repair')),
@@ -5680,7 +5680,7 @@ def ensure_room_operations_tables(conn: sqlite3.Connection):
         );
         """)
         cursor.execute("""
-        CREATE TABLE IF NOT EXISTS RoomMoves (
+        CREATE TABLE IF NOT EXISTS roommoves (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             booking_id INTEGER NOT NULL,
             old_room_id INTEGER NOT NULL,
@@ -5698,7 +5698,7 @@ def ensure_room_operations_tables(conn: sqlite3.Connection):
     else:
         try:
             cursor.execute("""
-            CREATE TABLE IF NOT EXISTS RoomLockouts (
+            CREATE TABLE IF NOT EXISTS roomlockouts (
                 id SERIAL PRIMARY KEY,
                 room_id INTEGER NOT NULL REFERENCES Rooms(id) ON DELETE CASCADE,
                 lockout_type VARCHAR(50) NOT NULL DEFAULT 'Out_of_Order',
@@ -5715,7 +5715,7 @@ def ensure_room_operations_tables(conn: sqlite3.Connection):
             );
             """)
             cursor.execute("""
-            CREATE TABLE IF NOT EXISTS RoomMoves (
+            CREATE TABLE IF NOT EXISTS roommoves (
                 id SERIAL PRIMARY KEY,
                 booking_id INTEGER NOT NULL REFERENCES Bookings(id) ON DELETE CASCADE,
                 old_room_id INTEGER NOT NULL REFERENCES Rooms(id) ON DELETE CASCADE,
@@ -5812,7 +5812,7 @@ def declare_room_lockout(
         )
 
     cursor.execute(
-        "SELECT id FROM RoomLockouts WHERE room_id = ? AND (is_active = TRUE OR is_active = 1);",
+        "SELECT id FROM roomlockouts WHERE room_id = ? AND (is_active = TRUE OR is_active = 1);",
         (room_id,),
     )
     active_existing = cursor.fetchone()
@@ -5824,7 +5824,7 @@ def declare_room_lockout(
 
     cursor.execute(
         """
-        INSERT INTO RoomLockouts (room_id, lockout_type, reason, assigned_trade, expected_completion, authorized_by, notes, is_active)
+        INSERT INTO roomlockouts (room_id, lockout_type, reason, assigned_trade, expected_completion, authorized_by, notes, is_active)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?);
         """,
         (
@@ -5864,7 +5864,7 @@ def declare_room_lockout(
     cursor.execute(
         """
         SELECT l.*, r.room_number, r.room_type
-        FROM RoomLockouts l
+        FROM roomlockouts l
         JOIN Rooms r ON l.room_id = r.id
         WHERE l.id = ?;
         """,
@@ -5905,7 +5905,7 @@ def release_room_lockout(
         )
 
     cursor.execute(
-        "SELECT * FROM RoomLockouts WHERE room_id = ? AND (is_active = TRUE OR is_active = 1) ORDER BY id DESC LIMIT 1;",
+        "SELECT * FROM roomlockouts WHERE room_id = ? AND (is_active = TRUE OR is_active = 1) ORDER BY id DESC LIMIT 1;",
         (room_id,),
     )
     lockout = cursor.fetchone()
@@ -5920,7 +5920,7 @@ def release_room_lockout(
 
     cursor.execute(
         """
-        UPDATE RoomLockouts
+        UPDATE roomlockouts
         SET is_active = ?,
             resolved_at = ?,
             resolved_by = ?,
@@ -5960,7 +5960,7 @@ def release_room_lockout(
     cursor.execute(
         """
         SELECT l.*, r.room_number, r.room_type
-        FROM RoomLockouts l
+        FROM roomlockouts l
         JOIN Rooms r ON l.room_id = r.id
         WHERE l.id = ?;
         """,
@@ -6001,7 +6001,7 @@ def list_room_lockouts(
     cursor.execute(
         f"""
         SELECT l.*, r.room_number, r.room_type
-        FROM RoomLockouts l
+        FROM roomlockouts l
         JOIN Rooms r ON l.room_id = r.id
         {where_sql}
         ORDER BY l.is_active DESC, l.id DESC;
@@ -6120,7 +6120,7 @@ def execute_room_move(
 
     cursor.execute(
         """
-        INSERT INTO RoomMoves (booking_id, old_room_id, new_room_id, reason, relocated_by, keycards_reassigned)
+        INSERT INTO roommoves (booking_id, old_room_id, new_room_id, reason, relocated_by, keycards_reassigned)
         VALUES (?, ?, ?, ?, ?, ?);
         """,
         (
@@ -6190,7 +6190,7 @@ def get_booking_room_moves(
                g.first_name, g.last_name,
                r_old.room_number as old_room_number,
                r_new.room_number as new_room_number
-        FROM RoomMoves m
+        FROM roommoves m
         JOIN Bookings b ON m.booking_id = b.id
         JOIN Guests g ON b.guest_id = g.id
         JOIN Rooms r_old ON m.old_room_id = r_old.id
@@ -6245,7 +6245,7 @@ def get_room_operations_dashboard(conn: sqlite3.Connection = Depends(get_db)):
     cursor.execute(
         """
         SELECT l.*, r.room_number, r.room_type
-        FROM RoomLockouts l
+        FROM roomlockouts l
         JOIN Rooms r ON l.room_id = r.id
         WHERE (l.is_active = TRUE OR l.is_active = 1)
         ORDER BY l.id DESC;
@@ -6263,7 +6263,7 @@ def get_room_operations_dashboard(conn: sqlite3.Connection = Depends(get_db)):
                g.first_name, g.last_name,
                r_old.room_number as old_room_number,
                r_new.room_number as new_room_number
-        FROM RoomMoves m
+        FROM roommoves m
         JOIN Bookings b ON m.booking_id = b.id
         JOIN Guests g ON b.guest_id = g.id
         JOIN Rooms r_old ON m.old_room_id = r_old.id

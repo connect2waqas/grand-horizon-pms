@@ -952,6 +952,147 @@ class AccessControlDashboardResponse(BaseModel):
     recent_denied_events: List[AccessLogResponse]
 
 
+# ==========================================
+# Module 6: Multi-Currency & International Tax Engine
+# ==========================================
+
+class CurrencyCode(str, Enum):
+    """Supported international hotel operating currencies."""
+    USD = "USD"
+    EUR = "EUR"
+    GBP = "GBP"
+    JPY = "JPY"
+    CAD = "CAD"
+    AUD = "AUD"
+    CHF = "CHF"
+
+
+class TaxType(str, Enum):
+    """Types of tax computation algorithms."""
+    PERCENTAGE = "Percentage"
+    FLAT_PER_NIGHT = "Flat_Per_Night"
+    FLAT_PER_STAY = "Flat_Per_Stay"
+
+
+class TaxAppliesTo(str, Enum):
+    """Scope of line-item charges subject to the tax rule."""
+    ALL = "All"
+    ROOM_ONLY = "Room_Only"
+    INCIDENTALS = "Incidentals"
+
+
+class ExchangeRateBase(BaseModel):
+    """Core exchange rate attributes."""
+    currency_code: str = Field(..., max_length=3, description="ISO 4217 Currency Code")
+    currency_name: str = Field(..., max_length=50, description="Full currency name")
+    symbol: str = Field(..., max_length=10, description="Currency glyph symbol (e.g. $, €, £, ¥)")
+    rate_to_usd: float = Field(..., gt=0.0, description="Conversion multiplier where amount_currency = amount_usd * rate_to_usd")
+    is_base: bool = Field(default=False, description="Flag indicating USD standard base")
+
+
+class ExchangeRateUpdate(BaseModel):
+    """Payload to adjust live foreign exchange conversion multiplier."""
+    rate_to_usd: float = Field(..., gt=0.0, description="Updated conversion factor against 1.0 USD")
+
+
+class ExchangeRateResponse(ExchangeRateBase):
+    """Output model for live currency rate record."""
+    updated_at: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CurrencyConvertRequest(BaseModel):
+    """Request payload to convert funds across supported currencies."""
+    amount: float = Field(..., ge=0.0, description="Source currency amount")
+    from_currency: str = Field(default="USD", description="Source currency ISO code")
+    to_currency: str = Field(default="EUR", description="Target destination currency ISO code")
+
+
+class CurrencyConvertResponse(BaseModel):
+    """Real-time conversion result with formatted display string."""
+    original_amount: float
+    from_currency: str
+    converted_amount: float
+    to_currency: str
+    rate_applied: float
+    symbol: str
+    formatted_display: str
+
+
+class TaxRuleBase(BaseModel):
+    """Hotel jurisdictional tax and surcharge configuration."""
+    tax_name: str = Field(..., max_length=100, description="Official statutory name of the tax rule")
+    tax_type: TaxType = Field(default=TaxType.PERCENTAGE, description="Computation method")
+    rate: float = Field(..., ge=0.0, description="Percentage (e.g. 10.0 for 10%) or flat dollar surcharge")
+    currency_code: str = Field(default="USD", description="Currency code for flat fees")
+    applies_to: TaxAppliesTo = Field(default=TaxAppliesTo.ALL, description="Applicable transaction scope")
+    is_active: bool = Field(default=True, description="Whether rule is currently levied")
+
+
+class TaxRuleCreate(TaxRuleBase):
+    """Payload to create a new hotel tax or municipal surcharge."""
+    pass
+
+
+class TaxRuleUpdate(BaseModel):
+    """Payload to update an existing tax rule."""
+    tax_name: Optional[str] = None
+    tax_type: Optional[TaxType] = None
+    rate: Optional[float] = Field(None, ge=0.0)
+    applies_to: Optional[TaxAppliesTo] = None
+    is_active: Optional[bool] = None
+
+
+class TaxRuleResponse(TaxRuleBase):
+    """Output model for statutory tax rule."""
+    id: int
+    created_at: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TaxCalculationRequest(BaseModel):
+    """Payload to simulate and compute detailed tax breakdown for a stay."""
+    room_amount: float = Field(..., ge=0.0, description="Base room accommodation charge in USD")
+    nights: int = Field(default=1, ge=1, description="Length of stay in nights")
+    incidentals_amount: float = Field(default=0.0, ge=0.0, description="Total auxiliary incidentals in USD")
+    target_currency: str = Field(default="USD", description="Output currency for international quotes")
+
+
+class TaxItemDetail(BaseModel):
+    """Itemized breakdown of an applied statutory tax."""
+    tax_name: str
+    tax_type: str
+    rate: float
+    amount_usd: float
+    amount_converted: float
+
+
+class TaxCalculationResponse(BaseModel):
+    """Itemized tax computation invoice schedule."""
+    room_subtotal_usd: float
+    incidentals_subtotal_usd: float
+    subtotal_usd: float
+    taxes: List[TaxItemDetail]
+    total_tax_usd: float
+    grand_total_usd: float
+    target_currency: str
+    currency_symbol: str
+    rate_to_usd: float
+    grand_total_converted: float
+    formatted_display: str
+
+
+class FinanceDashboardResponse(BaseModel):
+    """Consolidated international finance, tax rules, and currency conversion strip."""
+    base_currency: str = "USD"
+    supported_currencies: List[ExchangeRateResponse]
+    active_tax_rules: List[TaxRuleResponse]
+    effective_tax_rate_percent: float
+
+
+
 
 
 

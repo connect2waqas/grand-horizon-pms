@@ -344,5 +344,59 @@ INSERT INTO public.accesslogs (card_uid, room_id, reader_location, event_type, a
 ('RFID-101A-8821', 1, 'Room 101 Exterior Lock', 'Granted', TRUE, '2026-10-01 10:15:00+00'),
 ('RFID-MASTER-001', 2, 'Room 102 Exterior Lock', 'Granted', TRUE, '2026-10-01 11:30:00+00'),
 ('RFID-101A-7700', 1, 'Room 101 Exterior Lock', 'Denied - Card Revoked', FALSE, '2026-10-01 11:45:00+00'),
-('RFID-101A-8821', 2, 'Room 102 Exterior Lock', 'Denied - Invalid Room', FALSE, '2026-10-01 12:00:00+00');
+('RFID-101A-8821', 2, 'Room 102 Exterior Lock', 'Denied - Invalid Room', FALSE, '2026-10-01 12:00:00+00')
+ON CONFLICT DO NOTHING;
+
+-- ==============================================================================
+-- Module 6: Multi-Currency & International Tax Engine
+-- ==============================================================================
+
+-- Table 13: exchangerates (Forex Conversion Rates Against Base USD)
+CREATE TABLE IF NOT EXISTS public.exchangerates (
+    currency_code VARCHAR(3) PRIMARY KEY,
+    currency_name VARCHAR(50) NOT NULL,
+    symbol VARCHAR(10) NOT NULL,
+    rate_to_usd NUMERIC(10, 4) NOT NULL CHECK (rate_to_usd > 0),
+    is_base BOOLEAN NOT NULL DEFAULT FALSE,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_exchangerates_is_base ON public.exchangerates (is_base);
+
+-- Table 14: taxrules (Statutory Hotel Taxes & Municipal Surcharges)
+CREATE TABLE IF NOT EXISTS public.taxrules (
+    id SERIAL PRIMARY KEY,
+    tax_name VARCHAR(100) NOT NULL,
+    tax_type VARCHAR(50) NOT NULL DEFAULT 'Percentage',
+    rate NUMERIC(10, 2) NOT NULL CHECK (rate >= 0),
+    currency_code VARCHAR(3) NOT NULL DEFAULT 'USD',
+    applies_to VARCHAR(50) NOT NULL DEFAULT 'All',
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_taxrules_active ON public.taxrules (is_active);
+
+-- Enable RLS
+ALTER TABLE public.exchangerates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.taxrules ENABLE ROW LEVEL SECURITY;
+
+-- 9. Initial Exchange Rates Seed Data
+INSERT INTO public.exchangerates (currency_code, currency_name, symbol, rate_to_usd, is_base) VALUES
+('USD', 'US Dollar', '$', 1.0000, TRUE),
+('EUR', 'Euro', '€', 0.9200, FALSE),
+('GBP', 'British Pound', '£', 0.7900, FALSE),
+('JPY', 'Japanese Yen', '¥', 152.5000, FALSE),
+('CAD', 'Canadian Dollar', 'C$', 1.3800, FALSE),
+('AUD', 'Australian Dollar', 'A$', 1.5200, FALSE),
+('CHF', 'Swiss Franc', 'CHF', 0.8800, FALSE)
+ON CONFLICT (currency_code) DO NOTHING;
+
+-- 10. Initial Statutory Tax Rules Seed Data
+INSERT INTO public.taxrules (tax_name, tax_type, rate, currency_code, applies_to, is_active) VALUES
+('Standard Occupancy Sales Tax / VAT', 'Percentage', 10.00, 'USD', 'All', TRUE),
+('City Tourism Municipal Surcharge', 'Flat_Per_Night', 5.00, 'USD', 'Room_Only', TRUE),
+('Eco Sustainability & Green Resort Levy', 'Flat_Per_Stay', 12.00, 'USD', 'All', TRUE)
+ON CONFLICT DO NOTHING;
+
 

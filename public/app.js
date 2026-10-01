@@ -12,6 +12,31 @@
 // Global State
 let allRoomsData = [];
 let selectedRoomId = null;
+let currentCurrency = { code: "USD", symbol: "$", rate: 1.0 };
+let cachedExchangeRates = [];
+let cachedTaxRules = [];
+
+function escapeHtml(str) {
+  if (str === null || str === undefined) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function formatCurrency(amountUsd, targetCurr = null) {
+  const c = targetCurr || currentCurrency;
+  if (!c || c.code === "USD") {
+    return `$${Number(amountUsd).toFixed(2)}`;
+  }
+  const converted = Number(amountUsd) * (c.rate || 1.0);
+  if (c.code === "JPY") {
+    return `${c.symbol}${Math.round(converted).toLocaleString("en-US")}`;
+  }
+  return `${c.symbol}${converted.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
 
 // DOM Elements: KPIs
 const kpiTotalRooms = document.getElementById("kpiTotalRooms");
@@ -157,6 +182,8 @@ document.addEventListener("DOMContentLoaded", () => {
   fetchSecurityDashboard();
   fetchKeycards();
   fetchAccessLogs();
+  fetchExchangeRates();
+  fetchTaxRules();
   setupEventListeners();
 });
 
@@ -600,7 +627,54 @@ function setupEventListeners() {
   if (btnExecuteTap) {
     btnExecuteTap.addEventListener("click", handleExecuteDoorTap);
   }
+
+  // Module 6: Global Currency Selector
+  const globalCurrencySelect = document.getElementById("globalCurrencySelect");
+  if (globalCurrencySelect) {
+    globalCurrencySelect.addEventListener("change", handleGlobalCurrencyChange);
+  }
+
+  // Module 6: Finance & Taxes Modal Controls
+  const btnOpenFinance = document.getElementById("btnOpenFinanceModal");
+  if (btnOpenFinance) {
+    btnOpenFinance.addEventListener("click", openFinanceModal);
+  }
+  const btnCloseFinance = document.getElementById("btnCloseFinanceModal");
+  if (btnCloseFinance) {
+    btnCloseFinance.addEventListener("click", closeFinanceModal);
+  }
+  const financeModal = document.getElementById("financeModal");
+  if (financeModal) {
+    financeModal.addEventListener("click", (e) => {
+      if (e.target === financeModal) closeFinanceModal();
+    });
+  }
+
+  // Module 6: Finance Tabs
+  const financeTabs = document.getElementById("financeModalTabs");
+  if (financeTabs) {
+    financeTabs.addEventListener("click", handleFinanceTabClick);
+  }
+
+  // Module 6: Quick FX Convert
+  const btnRunConvert = document.getElementById("btnRunQuickConvert");
+  if (btnRunConvert) {
+    btnRunConvert.addEventListener("click", handleRunQuickConvert);
+  }
+
+  // Module 6: Tax Rules Form
+  const newTaxForm = document.getElementById("newTaxRuleForm");
+  if (newTaxForm) {
+    newTaxForm.addEventListener("submit", handleCreateTaxRuleSubmit);
+  }
+
+  // Module 6: Stay Tax Simulator
+  const btnRunSim = document.getElementById("btnRunTaxSimulation");
+  if (btnRunSim) {
+    btnRunSim.addEventListener("click", handleRunTaxSimulation);
+  }
 }
+
 
 // ==========================================
 // 1. Executive KPI Bar (GET /analytics/kpis)
@@ -825,7 +899,7 @@ function renderRooms(rooms) {
       ${lockBannerHtml}
 
       <div class="card-middle">
-        <span class="room-price-val">$${room.price_per_night.toFixed(2)}</span>
+        <span class="room-price-val">${formatCurrency(room.price_per_night)}</span>
         <span class="room-price-period">/ night</span>
       </div>
 
@@ -1013,7 +1087,7 @@ function selectRoom(roomId, shouldFocus = true, roomObj = null) {
   selectedRoomBanner.classList.add("active");
   selectedRoomPill.textContent = room.room_type;
   selectedRoomName.textContent = `Room ${room.room_number}`;
-  selectedRoomRate.innerHTML = `$${room.price_per_night.toFixed(2)} <span class="rate-sub">/night</span>`;
+  selectedRoomRate.innerHTML = `${formatCurrency(room.price_per_night)} <span class="rate-sub">/night</span>`;
 
   // Highlight selected card in the grid
   document.querySelectorAll(".room-card").forEach((card) => {
@@ -1150,8 +1224,12 @@ async function updateCostEstimate() {
   if (!applyDynamic && !couponCode) {
     // Standard flat rate without dynamic surge or coupon
     const total = (nights * room.price_per_night).toFixed(2);
-    rateCalculation.textContent = `$${room.price_per_night.toFixed(2)} × ${nights} night${nights > 1 ? "s" : ""}`;
-    estimateTotal.textContent = `$${total}`;
+    rateCalculation.textContent = `${formatCurrency(room.price_per_night)} × ${nights} night${nights > 1 ? "s" : ""}`;
+    if (currentCurrency && currentCurrency.code !== "USD") {
+      estimateTotal.textContent = `${formatCurrency(total)} ($${Number(total).toFixed(2)})`;
+    } else {
+      estimateTotal.textContent = `$${total}`;
+    }
     if (pricingEngineStatus) pricingEngineStatus.textContent = "Standard Flat Rates";
     if (quoteBreakdownContainer) quoteBreakdownContainer.classList.add("hidden");
     activeQuote = null;
@@ -1178,8 +1256,12 @@ async function updateCostEstimate() {
     if (!res.ok) {
       // Fallback
       const total = (nights * room.price_per_night).toFixed(2);
-      rateCalculation.textContent = `$${room.price_per_night.toFixed(2)} × ${nights} night${nights > 1 ? "s" : ""}`;
-      estimateTotal.textContent = `$${total}`;
+      rateCalculation.textContent = `${formatCurrency(room.price_per_night)} × ${nights} night${nights > 1 ? "s" : ""}`;
+      if (currentCurrency && currentCurrency.code !== "USD") {
+        estimateTotal.textContent = `${formatCurrency(total)} ($${Number(total).toFixed(2)})`;
+      } else {
+        estimateTotal.textContent = `$${total}`;
+      }
       if (quoteBreakdownContainer) quoteBreakdownContainer.classList.add("hidden");
       return;
     }
@@ -1187,9 +1269,13 @@ async function updateCostEstimate() {
     const quote = await res.json();
     activeQuote = quote;
 
-    estimateTotal.textContent = `$${quote.grand_total.toFixed(2)}`;
+    if (currentCurrency && currentCurrency.code !== "USD") {
+      estimateTotal.textContent = `${formatCurrency(quote.grand_total)} ($${quote.grand_total.toFixed(2)})`;
+    } else {
+      estimateTotal.textContent = `$${quote.grand_total.toFixed(2)}`;
+    }
     const avgNightly = (quote.raw_room_total / quote.nights).toFixed(2);
-    rateCalculation.textContent = `$${avgNightly} avg/night • ${quote.nights} night${quote.nights > 1 ? "s" : ""}`;
+    rateCalculation.textContent = `${formatCurrency(avgNightly)} avg/night • ${quote.nights} night${quote.nights > 1 ? "s" : ""}`;
 
     if (pricingEngineStatus) {
       if (quote.min_los_met === false) {
@@ -3333,5 +3419,347 @@ async function handleExecuteDoorTap() {
     showToast(`Door tap failed: ${err.message}`, "error");
   }
 }
+
+// ==========================================
+// Module 6: Multi-Currency & International Tax Engine
+// ==========================================
+
+function handleGlobalCurrencyChange(e) {
+  const code = e.target.value;
+  const match = cachedExchangeRates.find((r) => r.currency_code === code);
+  if (match) {
+    currentCurrency = {
+      code: match.currency_code,
+      symbol: match.symbol,
+      rate: match.rate_to_usd,
+    };
+  } else {
+    const defaults = {
+      USD: { symbol: "$", rate: 1.0 },
+      EUR: { symbol: "€", rate: 0.92 },
+      GBP: { symbol: "£", rate: 0.79 },
+      JPY: { symbol: "¥", rate: 155.0 },
+      CAD: { symbol: "C$", rate: 1.36 },
+      AUD: { symbol: "A$", rate: 1.52 },
+      CHF: { symbol: "CHF", rate: 0.90 },
+    };
+    const def = defaults[code] || { symbol: code, rate: 1.0 };
+    currentCurrency = { code, symbol: def.symbol, rate: def.rate };
+  }
+
+  applyCurrentFilters();
+  if (selectedRoomId) {
+    const room = allRoomsData.find((r) => r.id === selectedRoomId);
+    if (room && selectedRoomRate) {
+      selectedRoomRate.innerHTML = `${formatCurrency(room.price_per_night)} <span class="rate-sub">/night</span>`;
+    }
+  }
+  updateCostEstimate();
+  showToast(`Operating display currency changed to ${currentCurrency.code} (${currentCurrency.symbol})`, "info");
+}
+
+async function fetchExchangeRates() {
+  try {
+    const res = await fetch("/api/finance/exchange-rates");
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    cachedExchangeRates = data;
+
+    const currentCode = document.getElementById("globalCurrencySelect")?.value || "USD";
+    const activeMatch = data.find((r) => r.currency_code === currentCode);
+    if (activeMatch) {
+      currentCurrency = {
+        code: activeMatch.currency_code,
+        symbol: activeMatch.symbol,
+        rate: activeMatch.rate_to_usd,
+      };
+    }
+
+    renderExchangeRatesTable(data);
+  } catch (err) {
+    console.warn("Failed to fetch exchange rates:", err);
+  }
+}
+
+function renderExchangeRatesTable(rates) {
+  const tbody = document.getElementById("forexRatesTableBody");
+  if (!tbody) return;
+  tbody.innerHTML = "";
+
+  rates.forEach((r) => {
+    const isBase = r.currency_code === "USD";
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><strong style="color: var(--text-high-contrast);">${r.currency_code}</strong></td>
+      <td>${escapeHtml(r.currency_name)}</td>
+      <td><span style="font-weight: 700; color: #a5b4fc;">${r.symbol}</span></td>
+      <td>
+        ${isBase ? '<span class="rate-mono">1.0000 (Base)</span>' : `
+          <input type="number" step="0.0001" min="0.0001" value="${r.rate_to_usd}" id="rateInput_${r.currency_code}" 
+                 style="width: 100px; padding: 3px 6px; font-size: 11px; background: var(--canvas-bg); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); color: #38bdf8; font-family: monospace;">
+        `}
+      </td>
+      <td>${isBase ? '<span class="tax-badge-type tax-badge-night">USD Base Peg</span>' : '<span style="color: var(--text-muted); font-size: 11px;">Floating Forex</span>'}</td>
+      <td>
+        ${isBase ? '<span style="color: var(--text-muted); font-size: 11px;">System Invariant</span>' : `
+          <button type="button" class="btn btn-secondary" style="font-size: 11px; padding: 3px 8px;" onclick="handleUpdateForexRate('${r.currency_code}')">Save Rate</button>
+        `}
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+async function handleUpdateForexRate(code) {
+  const input = document.getElementById(`rateInput_${code}`);
+  if (!input) return;
+  const newRate = parseFloat(input.value);
+  if (isNaN(newRate) || newRate <= 0) {
+    showToast("Please enter a valid positive exchange rate.", "error");
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/finance/exchange-rates/${code}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rate_to_usd: newRate }),
+    });
+    const updated = await res.json();
+    if (!res.ok) throw new Error(updated.detail || `HTTP ${res.status}`);
+
+    showToast(`Exchange rate for ${code} updated to ${updated.rate_to_usd}.`, "success");
+    fetchExchangeRates();
+    applyCurrentFilters();
+    updateCostEstimate();
+  } catch (err) {
+    showToast(`Failed to update exchange rate: ${err.message}`, "error");
+  }
+}
+
+async function handleRunQuickConvert() {
+  const amtInput = document.getElementById("quickConvertAmount");
+  const fromSelect = document.getElementById("quickConvertFrom");
+  const toSelect = document.getElementById("quickConvertTo");
+  const resultDisplay = document.getElementById("quickConvertResult");
+
+  const amount = parseFloat(amtInput?.value || 0);
+  const fromCurr = fromSelect?.value || "USD";
+  const toCurr = toSelect?.value || "EUR";
+
+  if (isNaN(amount) || amount < 0) {
+    showToast("Please enter a valid non-negative amount.", "error");
+    return;
+  }
+
+  try {
+    const res = await fetch("/api/finance/convert", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        amount: amount,
+        from_currency: fromCurr,
+        to_currency: toCurr,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+
+    if (resultDisplay) {
+      resultDisplay.textContent = `= ${data.formatted_amount}`;
+    }
+  } catch (err) {
+    showToast(`Conversion failed: ${err.message}`, "error");
+  }
+}
+
+async function fetchTaxRules() {
+  try {
+    const res = await fetch("/api/finance/tax-rules?include_inactive=true");
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    cachedTaxRules = data;
+    renderTaxRulesTable(data);
+  } catch (err) {
+    console.warn("Failed to fetch tax rules:", err);
+  }
+}
+
+function renderTaxRulesTable(rules) {
+  const tbody = document.getElementById("taxRulesTableBody");
+  if (!tbody) return;
+  tbody.innerHTML = "";
+
+  rules.forEach((t) => {
+    let typeBadgeClass = "tax-badge-pct";
+    let formattedRate = `${t.rate}%`;
+    if (t.tax_type === "Flat_Per_Night") {
+      typeBadgeClass = "tax-badge-night";
+      formattedRate = `$${t.rate.toFixed(2)} / night`;
+    } else if (t.tax_type === "Flat_Per_Stay") {
+      typeBadgeClass = "tax-badge-stay";
+      formattedRate = `$${t.rate.toFixed(2)} / stay`;
+    }
+
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><strong style="color: var(--text-high-contrast);">${escapeHtml(t.name)}</strong></td>
+      <td><span class="tax-badge-type ${typeBadgeClass}">${t.tax_type.replace(/_/g, ' ')}</span></td>
+      <td><span style="font-weight: 700; color: #fde047;">${formattedRate}</span></td>
+      <td><span style="font-size: 11px; color: var(--text-secondary);">${t.applies_to.replace(/_/g, ' ')}</span></td>
+      <td>
+        <span class="status-pill ${t.is_active ? 'status-pill-available' : 'status-pill-maintenance'}">
+          ${t.is_active ? 'Active' : 'Inactive'}
+        </span>
+      </td>
+      <td>
+        <button type="button" class="btn btn-secondary" style="font-size: 11px; padding: 3px 8px;" onclick="handleToggleTaxRuleActive(${t.id}, ${!t.is_active})">
+          ${t.is_active ? 'Deactivate' : 'Activate'}
+        </button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+async function handleToggleTaxRuleActive(id, newStatus) {
+  try {
+    const res = await fetch(`/api/finance/tax-rules/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ is_active: newStatus }),
+    });
+    const updated = await res.json();
+    if (!res.ok) throw new Error(updated.detail || `HTTP ${res.status}`);
+
+    showToast(`Tax rule "${updated.name}" is now ${updated.is_active ? 'Active' : 'Deactivated'}.`, "success");
+    fetchTaxRules();
+  } catch (err) {
+    showToast(`Failed to update tax rule: ${err.message}`, "error");
+  }
+}
+
+async function handleCreateTaxRuleSubmit(e) {
+  e.preventDefault();
+  const name = document.getElementById("newTaxName")?.value.trim();
+  const taxType = document.getElementById("newTaxType")?.value;
+  const rate = parseFloat(document.getElementById("newTaxRate")?.value || 0);
+  const appliesTo = document.getElementById("newTaxScope")?.value;
+
+  if (!name || isNaN(rate) || rate < 0) {
+    showToast("Please provide a valid statutory name and non-negative rate.", "error");
+    return;
+  }
+
+  try {
+    const res = await fetch("/api/finance/tax-rules", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: name,
+        tax_type: taxType,
+        rate: rate,
+        applies_to: appliesTo,
+        is_active: true,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+
+    showToast(`Statutory Tax Rule "${data.name}" established.`, "success");
+    document.getElementById("newTaxRuleForm")?.reset();
+    fetchTaxRules();
+  } catch (err) {
+    showToast(`Failed to create statutory tax rule: ${err.message}`, "error");
+  }
+}
+
+async function handleRunTaxSimulation() {
+  const roomCharge = parseFloat(document.getElementById("simRoomCharge")?.value || 0);
+  const nights = parseInt(document.getElementById("simNights")?.value || 1, 10);
+  const incidentals = parseFloat(document.getElementById("simIncidentals")?.value || 0);
+  const targetCurrency = document.getElementById("simTargetCurrency")?.value || "EUR";
+
+  const listContainer = document.getElementById("simTaxBreakdownList");
+  const totalUsdEl = document.getElementById("simGrandTotalUSD");
+  const totalConvEl = document.getElementById("simGrandTotalConverted");
+
+  try {
+    const res = await fetch("/api/finance/calculate-tax", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        room_charges: roomCharge,
+        nights: nights,
+        incidental_charges: incidentals,
+        target_currency: targetCurrency,
+      }),
+    });
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.detail || `HTTP ${res.status}`);
+
+    if (listContainer) {
+      let lines = `
+        <div style="display: flex; justify-content: space-between; padding: 2px 0;">
+          <span>Subtotal (Room + Inc.):</span>
+          <strong>$${result.subtotal.toFixed(2)}</strong>
+        </div>
+      `;
+      result.itemized_taxes.forEach((tax) => {
+        lines += `
+          <div style="display: flex; justify-content: space-between; padding: 2px 0; color: #fde047;">
+            <span>${escapeHtml(tax.rule_name)} (${tax.tax_type.replace(/_/g, ' ')}):</span>
+            <span>+$${tax.tax_amount.toFixed(2)}</span>
+          </div>
+        `;
+      });
+      lines += `
+        <div style="display: flex; justify-content: space-between; padding: 3px 0; border-top: 1px dashed var(--border-subtle); margin-top: 4px; color: #a5b4fc;">
+          <span>Total Statutory Taxes:</span>
+          <strong>+$${result.total_tax.toFixed(2)}</strong>
+        </div>
+      `;
+      listContainer.innerHTML = lines;
+    }
+
+    if (totalUsdEl) totalUsdEl.textContent = `$${result.grand_total_usd.toFixed(2)}`;
+    if (totalConvEl) totalConvEl.textContent = result.converted_grand_total_display;
+  } catch (err) {
+    showToast(`Simulation failed: ${err.message}`, "error");
+  }
+}
+
+function openFinanceModal() {
+  const modal = document.getElementById("financeModal");
+  if (modal) {
+    modal.classList.remove("hidden");
+    fetchExchangeRates();
+    fetchTaxRules();
+  }
+}
+
+function closeFinanceModal() {
+  const modal = document.getElementById("financeModal");
+  if (modal) modal.classList.add("hidden");
+}
+
+function handleFinanceTabClick(e) {
+  const tab = e.target.closest(".tab-btn");
+  if (!tab) return;
+  const container = document.getElementById("financeModalTabs");
+  if (!container) return;
+  container.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
+  tab.classList.add("active");
+
+  const tabId = tab.dataset.tab;
+  const forexContent = document.getElementById("tabContentForex");
+  const taxesContent = document.getElementById("tabContentTaxes");
+  const calcContent = document.getElementById("tabContentCalculator");
+
+  if (forexContent) forexContent.classList.toggle("hidden", tabId !== "forex");
+  if (taxesContent) taxesContent.classList.toggle("hidden", tabId !== "taxes");
+  if (calcContent) calcContent.classList.toggle("hidden", tabId !== "calculator");
+}
+
 
 

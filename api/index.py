@@ -46,6 +46,7 @@ from database import (
     seed_folio_charges,
     seed_housekeeping_tasks,
     seed_keycards,
+    seed_finance_rates_and_taxes,
     IS_POSTGRES,
 )
 from schemas import (
@@ -121,6 +122,22 @@ from schemas import (
     DoorTapResponse,
     AccessLogResponse,
     AccessControlDashboardResponse,
+    ExchangeRateBase,
+    ExchangeRateUpdate,
+    ExchangeRateResponse,
+    CurrencyConvertRequest,
+    CurrencyConvertResponse,
+    TaxRuleBase,
+    TaxRuleCreate,
+    TaxRuleUpdate,
+    TaxRuleResponse,
+    TaxCalculationRequest,
+    TaxCalculationResponse,
+    TaxItemDetail,
+    FinanceDashboardResponse,
+    CurrencyCode,
+    TaxType,
+    TaxAppliesTo,
 )
 
 # ==========================================
@@ -162,9 +179,11 @@ async def lifespan(app: FastAPI):
             seed_folio_charges()
             seed_housekeeping_tasks()
             seed_keycards()
+            seed_finance_rates_and_taxes()
         seed_rate_plans()
         seed_housekeeping_tasks()
         seed_keycards()
+        seed_finance_rates_and_taxes()
     except Exception as e:
         print(f"Lifespan initialization note: {e}")
     yield
@@ -5075,6 +5094,522 @@ def get_access_control_dashboard(conn: sqlite3.Connection = Depends(get_db)):
         granted_taps_today=granted_taps_today,
         denied_intrusions_today=denied_intrusions_today,
         recent_denied_events=recent_denied_events,
+    )
+
+
+# ==============================================================================
+# Module 6: Multi-Currency & International Tax Engine
+# ==============================================================================
+
+def ensure_finance_tables(conn: sqlite3.Connection):
+    """Guarantees ExchangeRates and TaxRules tables exist in SQLite / PostgreSQL."""
+    cursor = conn.cursor()
+    if not IS_POSTGRES:
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS ExchangeRates (
+            currency_code TEXT PRIMARY KEY,
+            currency_name TEXT NOT NULL,
+            symbol TEXT NOT NULL,
+            rate_to_usd REAL NOT NULL CHECK(rate_to_usd > 0),
+            is_base INTEGER NOT NULL DEFAULT 0,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        """)
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS TaxRules (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tax_name TEXT NOT NULL,
+            tax_type TEXT NOT NULL CHECK(tax_type IN ('Percentage', 'Flat_Per_Night', 'Flat_Per_Stay')),
+            rate REAL NOT NULL CHECK(rate >= 0),
+            currency_code TEXT NOT NULL DEFAULT 'USD',
+            applies_to TEXT NOT NULL DEFAULT 'All' CHECK(applies_to IN ('All', 'Room_Only', 'Incidentals')),
+            is_active INTEGER NOT NULL DEFAULT 1 CHECK(is_active IN (0, 1)),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        """)
+        conn.commit()
+    else:
+        try:
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS ExchangeRates (
+                currency_code VARCHAR(3) PRIMARY KEY,
+                currency_name VARCHAR(50) NOT NULL,
+                symbol VARCHAR(10) NOT NULL,
+                rate_to_usd NUMERIC(10, 4) NOT NULL CHECK(rate_to_usd > 0),
+                is_base BOOLEAN NOT NULL DEFAULT FALSE,
+                updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            );
+            """)
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS TaxRules (
+                id SERIAL PRIMARY KEY,
+                tax_name VARCHAR(100) NOT NULL,
+                tax_type VARCHAR(50) NOT NULL DEFAULT 'Percentage',
+                rate NUMERIC(10, 2) NOT NULL CHECK(rate >= 0),
+                currency_code VARCHAR(3) NOT NULL DEFAULT 'USD',
+                applies_to VARCHAR(50) NOT NULL DEFAULT 'All',
+                is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            );
+            """)
+            conn.commit()
+        except Exception as e:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            print(f"ensure_finance_tables postgres note: {e}")
+
+    # Ensure default records exist
+    cursor.execute("SELECT COUNT(*) as cnt FROM ExchangeRates;")
+    row = cursor.fetchone()
+    cnt = int(row["cnt"] if isinstance(row, dict) and "cnt" in row else (row[0] if row else 0))
+    if cnt == 0:
+        seed_rates = [
+            ("USD", "US Dollar", "$", 1.0, 1),
+            ("EUR", "Euro", "€", 0.92, 0),
+            ("GBP", "British Pound", "£", 0.79, 0),
+            ("JPY", "Japanese Yen", "¥", 152.50, 0),
+            ("CAD", "Canadian Dollar", "C$", 1.38, 0),
+            ("AUD", "Australian Dollar", "A$", 1.52, 0),
+            ("CHF", "Swiss Franc", "CHF", 0.88, 0),
+        ]
+        for r in seed_rates:
+            cursor.execute(
+                """
+                INSERT INTO ExchangeRates (currency_code, currency_name, symbol, rate_to_usd, is_base)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT (currency_code) DO NOTHING;
+                """,
+                (r[0], r[1], r[2], r[3], bool(r[4]) if IS_POSTGRES else r[4]),
+            )
+        seed_taxes = [
+            ("Standard Occupancy Sales Tax / VAT", "Percentage", 10.0, "USD", "All", 1),
+            ("City Tourism Municipal Surcharge", "Flat_Per_Night", 5.0, "USD", "Room_Only", 1),
+            ("Eco Sustainability & Green Resort Levy", "Flat_Per_Stay", 12.0, "USD", "All", 1),
+        ]
+        for t in seed_taxes:
+            cursor.execute(
+                """
+                INSERT INTO TaxRules (tax_name, tax_type, rate, currency_code, applies_to, is_active)
+                VALUES (?, ?, ?, ?, ?, ?);
+                """,
+                (t[0], t[1], t[2], t[3], t[4], bool(t[5]) if IS_POSTGRES else t[5]),
+            )
+        conn.commit()
+
+
+def row_to_exchange_rate_response(r) -> ExchangeRateResponse:
+    keys = set(r.keys()) if hasattr(r, "keys") else set()
+    return ExchangeRateResponse(
+        currency_code=str(r["currency_code"]),
+        currency_name=str(r["currency_name"]),
+        symbol=str(r["symbol"]),
+        rate_to_usd=float(r["rate_to_usd"]),
+        is_base=bool(r["is_base"]),
+        updated_at=str(r["updated_at"]) if "updated_at" in keys and r["updated_at"] else None,
+    )
+
+
+def row_to_tax_rule_response(r) -> TaxRuleResponse:
+    keys = set(r.keys()) if hasattr(r, "keys") else set()
+    return TaxRuleResponse(
+        id=int(r["id"]),
+        tax_name=str(r["tax_name"]),
+        tax_type=TaxType(r["tax_type"]),
+        rate=float(r["rate"]),
+        currency_code=str(r["currency_code"]) if "currency_code" in keys and r["currency_code"] else "USD",
+        applies_to=TaxAppliesTo(r["applies_to"]),
+        is_active=bool(r["is_active"]),
+        created_at=str(r["created_at"]) if "created_at" in keys and r["created_at"] else None,
+    )
+
+
+def format_currency_amount(amount: float, currency_code: str, symbol: str) -> str:
+    """Formats amount with appropriate decimal precision and symbol."""
+    code = currency_code.upper()
+    if code == "JPY":
+        return f"{symbol}{int(round(amount)):,}"
+    return f"{symbol}{amount:,.2f}"
+
+
+@app.get(
+    "/api/finance/exchange-rates",
+    response_model=List[ExchangeRateResponse],
+    summary="List all supported international foreign exchange conversion rates",
+    tags=["Multi-Currency & Tax Engine"],
+)
+def get_exchange_rates(conn: sqlite3.Connection = Depends(get_db)):
+    """Returns active forex conversion multipliers against USD base."""
+    ensure_finance_tables(conn)
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM ExchangeRates ORDER BY is_base DESC, currency_code ASC;")
+    rows = cursor.fetchall()
+    return [row_to_exchange_rate_response(r) for r in rows]
+
+
+@app.patch(
+    "/api/finance/exchange-rates/{currency_code}",
+    response_model=ExchangeRateResponse,
+    summary="Update live foreign exchange rate multiplier for a currency",
+    tags=["Multi-Currency & Tax Engine"],
+)
+def update_exchange_rate(
+    currency_code: str,
+    payload: ExchangeRateUpdate,
+    conn: sqlite3.Connection = Depends(get_db),
+):
+    """Adjusts currency conversion multiplier against USD base."""
+    ensure_finance_tables(conn)
+    code = currency_code.strip().upper()
+    if code == "USD" and abs(payload.rate_to_usd - 1.0) > 1e-6:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Base currency USD conversion rate must remain exactly 1.0000.",
+        )
+
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM ExchangeRates WHERE currency_code = ?;", (code,))
+    existing = cursor.fetchone()
+    if not existing:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Currency '{code}' is not supported in hotel exchange matrix.",
+        )
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    cursor.execute(
+        """
+        UPDATE ExchangeRates
+        SET rate_to_usd = ?,
+            updated_at = ?
+        WHERE currency_code = ?;
+        """,
+        (payload.rate_to_usd, now_iso, code),
+    )
+
+    record_audit_log(
+        conn,
+        action="EXCHANGE_RATE_UPDATED",
+        entity_type="System",
+        entity_id=None,
+        details={
+            "currency_code": code,
+            "old_rate": float(existing["rate_to_usd"]),
+            "new_rate": payload.rate_to_usd,
+        },
+        actor="Finance Controller",
+    )
+    conn.commit()
+
+    cursor.execute("SELECT * FROM ExchangeRates WHERE currency_code = ?;", (code,))
+    updated = cursor.fetchone()
+    return row_to_exchange_rate_response(updated)
+
+
+@app.post(
+    "/api/finance/convert",
+    response_model=CurrencyConvertResponse,
+    summary="Convert funds across supported international currencies in real time",
+    tags=["Multi-Currency & Tax Engine"],
+)
+def convert_currency(
+    payload: CurrencyConvertRequest,
+    conn: sqlite3.Connection = Depends(get_db),
+):
+    """Converts a monetary figure from one currency to another using live matrix."""
+    ensure_finance_tables(conn)
+    from_code = payload.from_currency.strip().upper()
+    to_code = payload.to_currency.strip().upper()
+
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM ExchangeRates WHERE currency_code IN (?, ?);", (from_code, to_code))
+    rows = {r["currency_code"]: r for r in cursor.fetchall()}
+
+    if from_code not in rows:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Source currency '{from_code}' is not in the exchange rates registry.",
+        )
+    if to_code not in rows:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Target currency '{to_code}' is not in the exchange rates registry.",
+        )
+
+    from_row = rows[from_code]
+    to_row = rows[to_code]
+
+    from_rate = float(from_row["rate_to_usd"])
+    to_rate = float(to_row["rate_to_usd"])
+
+    # Base conversion through USD
+    amount_in_usd = payload.amount / from_rate
+    converted_amount = amount_in_usd * to_rate
+    effective_cross_rate = to_rate / from_rate
+
+    target_symbol = str(to_row["symbol"])
+    display_str = format_currency_amount(converted_amount, to_code, target_symbol)
+
+    return CurrencyConvertResponse(
+        original_amount=round(payload.amount, 2),
+        from_currency=from_code,
+        converted_amount=round(converted_amount, 2 if to_code != "JPY" else 0),
+        to_currency=to_code,
+        rate_applied=round(effective_cross_rate, 4),
+        symbol=target_symbol,
+        formatted_display=display_str,
+    )
+
+
+@app.get(
+    "/api/finance/tax-rules",
+    response_model=List[TaxRuleResponse],
+    summary="List statutory municipal tax rules, hotel VAT, and eco levies",
+    tags=["Multi-Currency & Tax Engine"],
+)
+def get_tax_rules(
+    is_active: Optional[bool] = Query(None, description="Filter active/inactive rules"),
+    conn: sqlite3.Connection = Depends(get_db),
+):
+    """Returns hotel statutory tax schedule."""
+    ensure_finance_tables(conn)
+    cursor = conn.cursor()
+    if is_active is not None:
+        if is_active:
+            cursor.execute("SELECT * FROM TaxRules WHERE is_active = TRUE ORDER BY id ASC;")
+        else:
+            cursor.execute("SELECT * FROM TaxRules WHERE NOT is_active ORDER BY id ASC;")
+    else:
+        cursor.execute("SELECT * FROM TaxRules ORDER BY id ASC;")
+    rows = cursor.fetchall()
+    return [row_to_tax_rule_response(r) for r in rows]
+
+
+@app.post(
+    "/api/finance/tax-rules",
+    response_model=TaxRuleResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Define a statutory tax rule or municipal surcharge",
+    tags=["Multi-Currency & Tax Engine"],
+)
+def create_tax_rule(
+    payload: TaxRuleCreate,
+    conn: sqlite3.Connection = Depends(get_db),
+):
+    """Registers a new statutory tax, city fee, or resort levy."""
+    ensure_finance_tables(conn)
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        INSERT INTO TaxRules (tax_name, tax_type, rate, currency_code, applies_to, is_active)
+        VALUES (?, ?, ?, ?, ?, ?);
+        """,
+        (
+            payload.tax_name.strip(),
+            payload.tax_type.value,
+            payload.rate,
+            payload.currency_code.strip().upper(),
+            payload.applies_to.value,
+            bool(payload.is_active) if IS_POSTGRES else (1 if payload.is_active else 0),
+        ),
+    )
+    new_id = cursor.lastrowid
+    record_audit_log(
+        conn,
+        action="TAX_RULE_CREATED",
+        entity_type="System",
+        entity_id=new_id,
+        details={
+            "tax_name": payload.tax_name.strip(),
+            "tax_type": payload.tax_type.value,
+            "rate": payload.rate,
+        },
+        actor="Tax Compliance Officer",
+    )
+    conn.commit()
+
+    cursor.execute("SELECT * FROM TaxRules WHERE id = ?;", (new_id,))
+    row = cursor.fetchone()
+    return row_to_tax_rule_response(row)
+
+
+@app.patch(
+    "/api/finance/tax-rules/{rule_id}",
+    response_model=TaxRuleResponse,
+    summary="Update or toggle an existing statutory tax rule",
+    tags=["Multi-Currency & Tax Engine"],
+)
+def update_tax_rule(
+    rule_id: int,
+    payload: TaxRuleUpdate,
+    conn: sqlite3.Connection = Depends(get_db),
+):
+    """Updates tax rates, calculation algorithms, or active status."""
+    ensure_finance_tables(conn)
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM TaxRules WHERE id = ?;", (rule_id,))
+    rule = cursor.fetchone()
+    if not rule:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Tax rule with ID {rule_id} does not exist.",
+        )
+
+    updates = []
+    params = []
+    if payload.tax_name is not None:
+        updates.append("tax_name = ?")
+        params.append(payload.tax_name.strip())
+    if payload.tax_type is not None:
+        updates.append("tax_type = ?")
+        params.append(payload.tax_type.value)
+    if payload.rate is not None:
+        updates.append("rate = ?")
+        params.append(payload.rate)
+    if payload.applies_to is not None:
+        updates.append("applies_to = ?")
+        params.append(payload.applies_to.value)
+    if payload.is_active is not None:
+        updates.append("is_active = ?")
+        params.append(bool(payload.is_active) if IS_POSTGRES else (1 if payload.is_active else 0))
+
+    if updates:
+        params.append(rule_id)
+        cursor.execute(f"UPDATE TaxRules SET {', '.join(updates)} WHERE id = ?;", params)
+        record_audit_log(
+            conn,
+            action="TAX_RULE_UPDATED",
+            entity_type="System",
+            entity_id=rule_id,
+            details=payload.model_dump(exclude_unset=True),
+            actor="Tax Compliance Officer",
+        )
+        conn.commit()
+
+    cursor.execute("SELECT * FROM TaxRules WHERE id = ?;", (rule_id,))
+    updated_rule = cursor.fetchone()
+    return row_to_tax_rule_response(updated_rule)
+
+
+@app.post(
+    "/api/finance/calculate-tax",
+    response_model=TaxCalculationResponse,
+    summary="Simulate full statutory tax breakdown and multi-currency quote for a stay",
+    tags=["Multi-Currency & Tax Engine"],
+)
+def calculate_stay_taxes(
+    payload: TaxCalculationRequest,
+    conn: sqlite3.Connection = Depends(get_db),
+):
+    """
+    Computes statutory taxes and total bill in USD and target currency:
+    - Percentage taxes: applied based on applies_to scope ('All', 'Room_Only', 'Incidentals')
+    - Flat_Per_Night taxes: multiplied by length of stay
+    - Flat_Per_Stay taxes: applied once per folio
+    """
+    ensure_finance_tables(conn)
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM TaxRules WHERE is_active = TRUE ORDER BY id ASC;")
+    tax_rows = cursor.fetchall()
+
+    target_code = payload.target_currency.strip().upper()
+    cursor.execute("SELECT * FROM ExchangeRates WHERE currency_code = ?;", (target_code,))
+    target_fx = cursor.fetchone()
+    if not target_fx:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Target currency '{target_code}' is not supported in the exchange registry.",
+        )
+    fx_rate = float(target_fx["rate_to_usd"])
+    symbol = str(target_fx["symbol"])
+
+    subtotal_room = payload.room_amount
+    subtotal_incidentals = payload.incidentals_amount
+    subtotal_usd = subtotal_room + subtotal_incidentals
+
+    itemized_taxes = []
+    total_tax_usd = 0.0
+
+    for tr in tax_rows:
+        t_type = tr["tax_type"]
+        t_rate = float(tr["rate"])
+        t_scope = tr["applies_to"]
+        t_name = tr["tax_name"]
+
+        tax_amt_usd = 0.0
+        if t_type == "Percentage":
+            if t_scope == "Room_Only":
+                tax_amt_usd = subtotal_room * (t_rate / 100.0)
+            elif t_scope == "Incidentals":
+                tax_amt_usd = subtotal_incidentals * (t_rate / 100.0)
+            else:  # All
+                tax_amt_usd = subtotal_usd * (t_rate / 100.0)
+        elif t_type == "Flat_Per_Night":
+            tax_amt_usd = t_rate * payload.nights
+        elif t_type == "Flat_Per_Stay":
+            tax_amt_usd = t_rate
+
+        tax_amt_usd = round(tax_amt_usd, 2)
+        total_tax_usd += tax_amt_usd
+
+        tax_converted = round(tax_amt_usd * fx_rate, 2 if target_code != "JPY" else 0)
+
+        itemized_taxes.append(
+            TaxItemDetail(
+                tax_name=t_name,
+                tax_type=t_type,
+                rate=t_rate,
+                amount_usd=tax_amt_usd,
+                amount_converted=tax_converted,
+            )
+        )
+
+    grand_total_usd = round(subtotal_usd + total_tax_usd, 2)
+    grand_total_converted = round(grand_total_usd * fx_rate, 2 if target_code != "JPY" else 0)
+    formatted = format_currency_amount(grand_total_converted, target_code, symbol)
+
+    return TaxCalculationResponse(
+        room_subtotal_usd=round(subtotal_room, 2),
+        incidentals_subtotal_usd=round(subtotal_incidentals, 2),
+        subtotal_usd=round(subtotal_usd, 2),
+        taxes=itemized_taxes,
+        total_tax_usd=round(total_tax_usd, 2),
+        grand_total_usd=grand_total_usd,
+        target_currency=target_code,
+        currency_symbol=symbol,
+        rate_to_usd=fx_rate,
+        grand_total_converted=grand_total_converted,
+        formatted_display=formatted,
+    )
+
+
+@app.get(
+    "/api/finance/dashboard",
+    response_model=FinanceDashboardResponse,
+    summary="Get multi-currency and statutory tax dashboard configuration",
+    tags=["Multi-Currency & Tax Engine"],
+)
+def get_finance_dashboard(conn: sqlite3.Connection = Depends(get_db)):
+    """Consolidated summary of supported currencies, live rates, and active statutory tax rules."""
+    ensure_finance_tables(conn)
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT * FROM ExchangeRates ORDER BY is_base DESC, currency_code ASC;")
+    fx_rows = cursor.fetchall()
+    supported_currencies = [row_to_exchange_rate_response(r) for r in fx_rows]
+
+    cursor.execute("SELECT * FROM TaxRules WHERE is_active = TRUE ORDER BY id ASC;")
+    tax_rows = cursor.fetchall()
+    active_tax_rules = [row_to_tax_rule_response(r) for r in tax_rows]
+
+    percentage_taxes = sum(r.rate for r in active_tax_rules if r.tax_type == TaxType.PERCENTAGE)
+
+    return FinanceDashboardResponse(
+        base_currency="USD",
+        supported_currencies=supported_currencies,
+        active_tax_rules=active_tax_rules,
+        effective_tax_rate_percent=round(percentage_taxes, 2),
     )
 
 

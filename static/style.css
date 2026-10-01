@@ -2920,6 +2920,83 @@ input::-webkit-calendar-picker-indicator {
   font-family: monospace;
 }
 
+/* ==========================================================================
+   Module 6: Multi-Currency & International Tax Engine Styles
+   ========================================================================== */
+
+.currency-selector-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(30, 41, 59, 0.7);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 4px 10px;
+  color: var(--text-muted);
+  transition: var(--transition-standard);
+}
+
+.currency-selector-badge:hover,
+.currency-selector-badge:focus-within {
+  border-color: var(--brand-indigo);
+  background: rgba(30, 41, 59, 0.95);
+  color: #a5b4fc;
+  box-shadow: 0 0 10px rgba(99, 102, 241, 0.15);
+}
+
+.currency-selector-badge select {
+  background: transparent;
+  border: none;
+  color: var(--text-high-contrast);
+  font-family: var(--font-family);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  outline: none;
+}
+
+.currency-selector-badge select option {
+  background-color: var(--surface-bg);
+  color: var(--text-high-contrast);
+}
+
+.tax-badge-type {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: var(--radius-sm);
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.tax-badge-pct {
+  background: rgba(99, 102, 241, 0.15);
+  color: #a5b4fc;
+  border: 1px solid rgba(99, 102, 241, 0.3);
+}
+
+.tax-badge-night {
+  background: rgba(16, 185, 129, 0.15);
+  color: #6ee7b7;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.tax-badge-stay {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fde047;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.rate-mono {
+  font-family: monospace;
+  font-size: 12px;
+  color: #38bdf8;
+  font-weight: 600;
+}
+
+
 
 
 

@@ -570,6 +570,32 @@ def init_db() -> None:
     );
     """)
 
+    # Table 13: ExchangeRates (Module 6: Multi-Currency & International Forex Rates)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS ExchangeRates (
+        currency_code TEXT PRIMARY KEY,
+        currency_name TEXT NOT NULL,
+        symbol TEXT NOT NULL,
+        rate_to_usd REAL NOT NULL CHECK(rate_to_usd > 0),
+        is_base INTEGER NOT NULL DEFAULT 0,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
+
+    # Table 14: TaxRules (Module 6: Statutory Taxes & Municipal Surcharges)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS TaxRules (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tax_name TEXT NOT NULL,
+        tax_type TEXT NOT NULL CHECK(tax_type IN ('Percentage', 'Flat_Per_Night', 'Flat_Per_Stay')),
+        rate REAL NOT NULL CHECK(rate >= 0),
+        currency_code TEXT NOT NULL DEFAULT 'USD',
+        applies_to TEXT NOT NULL DEFAULT 'All' CHECK(applies_to IN ('All', 'Room_Only', 'Incidentals')),
+        is_active INTEGER NOT NULL DEFAULT 1 CHECK(is_active IN (0, 1)),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
+
     conn.commit()
     conn.close()
     print("Database tables initialized successfully with foreign key enforcement.")
@@ -1064,6 +1090,98 @@ def seed_keycards() -> None:
     conn.close()
 
 
+def seed_finance_rates_and_taxes():
+    """
+    Seeds default global exchange rates and statutory tax rules (SQLite / PostgreSQL).
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    default_rates = [
+        ("USD", "US Dollar", "$", 1.0, 1),
+        ("EUR", "Euro", "€", 0.92, 0),
+        ("GBP", "British Pound", "£", 0.79, 0),
+        ("JPY", "Japanese Yen", "¥", 152.50, 0),
+        ("CAD", "Canadian Dollar", "C$", 1.38, 0),
+        ("AUD", "Australian Dollar", "A$", 1.52, 0),
+        ("CHF", "Swiss Franc", "CHF", 0.88, 0),
+    ]
+
+    default_taxes = [
+        ("Standard Occupancy Sales Tax / VAT", "Percentage", 10.0, "USD", "All", 1),
+        ("City Tourism Municipal Surcharge", "Flat_Per_Night", 5.0, "USD", "Room_Only", 1),
+        ("Eco Sustainability & Green Resort Levy", "Flat_Per_Stay", 12.0, "USD", "All", 1),
+    ]
+
+    if not IS_POSTGRES:
+        cursor.execute("SELECT COUNT(*) as cnt FROM ExchangeRates;")
+        row = cursor.fetchone()
+        cnt = row["cnt"] if row else 0
+        if cnt == 0:
+            for r in default_rates:
+                cursor.execute("""
+                INSERT OR REPLACE INTO ExchangeRates (currency_code, currency_name, symbol, rate_to_usd, is_base)
+                VALUES (?, ?, ?, ?, ?);
+                """, r)
+            for t in default_taxes:
+                cursor.execute("""
+                INSERT INTO TaxRules (tax_name, tax_type, rate, currency_code, applies_to, is_active)
+                VALUES (?, ?, ?, ?, ?, ?);
+                """, t)
+            conn.commit()
+            print("ExchangeRates & TaxRules seeded (SQLite).")
+    else:
+        try:
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS ExchangeRates (
+                currency_code VARCHAR(3) PRIMARY KEY,
+                currency_name VARCHAR(50) NOT NULL,
+                symbol VARCHAR(10) NOT NULL,
+                rate_to_usd NUMERIC(10, 4) NOT NULL CHECK(rate_to_usd > 0),
+                is_base BOOLEAN NOT NULL DEFAULT FALSE,
+                updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            );
+            """)
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS TaxRules (
+                id SERIAL PRIMARY KEY,
+                tax_name VARCHAR(100) NOT NULL,
+                tax_type VARCHAR(50) NOT NULL DEFAULT 'Percentage',
+                rate NUMERIC(10, 2) NOT NULL CHECK(rate >= 0),
+                currency_code VARCHAR(3) NOT NULL DEFAULT 'USD',
+                applies_to VARCHAR(50) NOT NULL DEFAULT 'All',
+                is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            );
+            """)
+            conn.commit()
+
+            cursor.execute("SELECT COUNT(*) as cnt FROM ExchangeRates;")
+            row = cursor.fetchone()
+            cnt = row["cnt"] if row and "cnt" in row.keys() else 0
+            if cnt == 0:
+                for r in default_rates:
+                    cursor.execute("""
+                    INSERT INTO ExchangeRates (currency_code, currency_name, symbol, rate_to_usd, is_base)
+                    VALUES (?, ?, ?, ?, ?)
+                    ON CONFLICT (currency_code) DO NOTHING;
+                    """, (r[0], r[1], r[2], r[3], bool(r[4])))
+                for t in default_taxes:
+                    cursor.execute("""
+                    INSERT INTO TaxRules (tax_name, tax_type, rate, currency_code, applies_to, is_active)
+                    VALUES (?, ?, ?, ?, ?, ?);
+                    """, (t[0], t[1], t[2], t[3], t[4], bool(t[5])))
+                conn.commit()
+                print("ExchangeRates & TaxRules seeded (PostgreSQL).")
+        except Exception as e:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            print(f"PostgreSQL Finance seed note: {e}")
+    conn.close()
+
+
 if __name__ == "__main__":
     print(f"Target SQLite Database: {DATABASE_PATH}")
     init_db()
@@ -1076,6 +1194,7 @@ if __name__ == "__main__":
     seed_folio_charges()
     seed_housekeeping_tasks()
     seed_keycards()
+    seed_finance_rates_and_taxes()
 
 
 

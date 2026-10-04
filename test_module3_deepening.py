@@ -148,7 +148,7 @@ def test_mlos_restriction_quote_and_booking_enforcement(client: TestClient):
     """
     client.patch("/rooms/1/status", json={"status": "Available"})
 
-    offset = random.randint(4000, 6000)
+    offset = random.randint(25000, 75000)
     check_in_1n = (date.today() + timedelta(days=offset)).isoformat()
     check_out_1n = (date.today() + timedelta(days=offset + 1)).isoformat()
 

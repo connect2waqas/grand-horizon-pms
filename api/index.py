@@ -5790,92 +5790,99 @@ def declare_room_lockout(
     payload: RoomLockoutCreate,
     conn: sqlite3.Connection = Depends(get_db),
 ):
-    """
-    Takes a room out of inventory for severe defect (OOO) or cosmetic maintenance (OOS):
-    - Validates target room exists (404)
-    - Validates room is not currently occupied by an in-house guest (400 - suggest room move first)
-    - Transitions room status to 'Maintenance' with lock_reason set
-    - Creates active RoomLockouts record
-    - Logs audit trail entry ROOM_LOCKOUT_DECLARED
-    """
-    ensure_room_operations_tables(conn)
-    cursor = conn.cursor()
+    try:
+        ensure_room_operations_tables(conn)
+        cursor = conn.cursor()
 
-    cursor.execute("SELECT id, room_number, room_type, status FROM Rooms WHERE id = ?;", (room_id,))
-    room = cursor.fetchone()
-    if not room:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Room with ID {room_id} does not exist.",
+        cursor.execute("SELECT id, room_number, room_type, status FROM Rooms WHERE id = ?;", (room_id,))
+        room = cursor.fetchone()
+        if not room:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Room with ID {room_id} does not exist.",
+            )
+
+        if room["status"] == "Occupied":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Room {room['room_number']} is currently occupied by an in-house guest. Execute an emergency room move before taking out of order.",
+            )
+
+        cursor.execute(
+            "SELECT id FROM roomlockouts WHERE room_id = ? AND is_active = TRUE;",
+            (room_id,),
+        )
+        active_existing = cursor.fetchone()
+        if active_existing:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Room {room['room_number']} is already under an active lockout (#LK-{active_existing['id']}).",
+            )
+
+        cursor.execute(
+            """
+            INSERT INTO roomlockouts (room_id, lockout_type, reason, assigned_trade, expected_completion, authorized_by, notes, is_active)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+            """,
+            (
+                room_id,
+                payload.lockout_type.value,
+                payload.reason.strip(),
+                payload.assigned_trade or "General Maintenance",
+                payload.expected_completion,
+                payload.authorized_by or "Duty Manager",
+                payload.notes.strip() if payload.notes else "",
+                bool(True) if IS_POSTGRES else 1,
+            ),
+        )
+        new_lockout_id = cursor.lastrowid
+
+        cursor.execute(
+            "UPDATE Rooms SET status = 'Maintenance', lock_reason = ?, cleanliness_status = 'Dirty' WHERE id = ?;",
+            (payload.reason.strip(), room_id),
         )
 
-    if room["status"] == "Occupied":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Room {room['room_number']} is currently occupied by an in-house guest. Execute an emergency room move before taking out of order.",
+        record_audit_log(
+            conn,
+            action="ROOM_LOCKOUT_DECLARED",
+            entity_type="Room",
+            entity_id=room_id,
+            details={
+                "room_number": room["room_number"],
+                "lockout_id": new_lockout_id,
+                "lockout_type": payload.lockout_type.value,
+                "reason": payload.reason.strip(),
+                "authorized_by": payload.authorized_by,
+            },
+            actor=payload.authorized_by or "Duty Manager",
         )
+        conn.commit()
 
-    cursor.execute(
-        "SELECT id FROM roomlockouts WHERE room_id = ? AND is_active = TRUE;",
-        (room_id,),
-    )
-    active_existing = cursor.fetchone()
-    if active_existing:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Room {room['room_number']} is already under an active lockout (#LK-{active_existing['id']}).",
+        cursor.execute(
+            """
+            SELECT l.*, r.room_number, r.room_type
+            FROM roomlockouts l
+            JOIN Rooms r ON l.room_id = r.id
+            WHERE l.id = ?;
+            """,
+            (new_lockout_id,),
         )
-
-    cursor.execute(
-        """
-        INSERT INTO roomlockouts (room_id, lockout_type, reason, assigned_trade, expected_completion, authorized_by, notes, is_active)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?);
-        """,
-        (
-            room_id,
-            payload.lockout_type.value,
-            payload.reason.strip(),
-            payload.assigned_trade or "General Maintenance",
-            payload.expected_completion,
-            payload.authorized_by or "Duty Manager",
-            payload.notes.strip() if payload.notes else "",
-            bool(True) if IS_POSTGRES else 1,
-        ),
-    )
-    new_lockout_id = cursor.lastrowid
-
-    cursor.execute(
-        "UPDATE Rooms SET status = 'Maintenance', lock_reason = ?, cleanliness_status = 'Dirty' WHERE id = ?;",
-        (payload.reason.strip(), room_id),
-    )
-
-    record_audit_log(
-        conn,
-        action="ROOM_LOCKOUT_DECLARED",
-        entity_type="Room",
-        entity_id=room_id,
-        details={
-            "room_number": room["room_number"],
-            "lockout_id": new_lockout_id,
-            "lockout_type": payload.lockout_type.value,
-            "reason": payload.reason.strip(),
-            "authorized_by": payload.authorized_by,
-        },
-        actor=payload.authorized_by or "Duty Manager",
-    )
-    conn.commit()
-
-    cursor.execute(
-        """
-        SELECT l.*, r.room_number, r.room_type
-        FROM roomlockouts l
-        JOIN Rooms r ON l.room_id = r.id
-        WHERE l.id = ?;
-        """,
-        (new_lockout_id,),
-    )
-    row = cursor.fetchone()
-    return row_to_room_lockout_response(row)
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to retrieve newly created lockout with ID {new_lockout_id}",
+            )
+        return row_to_room_lockout_response(row)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        import traceback
+        tb = traceback.format_exc()
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"error_type": type(exc).__name__, "error_detail": str(exc), "traceback": tb},
+        )
 
 
 @app.post(

@@ -5658,85 +5658,70 @@ def get_finance_dashboard(conn: sqlite3.Connection = Depends(get_db)):
 # ==============================================================================
 
 def ensure_room_operations_tables(conn: sqlite3.Connection):
-    """Guarantees RoomLockouts and RoomMoves tables exist in SQLite / PostgreSQL.
-    On Postgres (production), these tables are created by supabase_migration.sql — skip DDL entirely.
-    """
+    """Guarantees RoomLockouts and RoomMoves tables exist in SQLite / PostgreSQL."""
     if IS_POSTGRES:
-        return  # Tables already exist via Supabase migration — no DDL needed
-    cursor = conn.cursor()
-    if not IS_POSTGRES:
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS roomlockouts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            room_id INTEGER NOT NULL,
-            lockout_type TEXT NOT NULL DEFAULT 'Out_of_Order' CHECK(lockout_type IN ('Out_of_Order', 'Out_of_Service', 'Emergency_Repair')),
-            reason TEXT NOT NULL,
-            assigned_trade TEXT DEFAULT 'General Maintenance',
-            expected_completion TEXT DEFAULT NULL,
-            authorized_by TEXT NOT NULL DEFAULT 'Duty Manager',
-            notes TEXT DEFAULT '',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            resolved_at TIMESTAMP DEFAULT NULL,
-            resolved_by TEXT DEFAULT NULL,
-            resolution_notes TEXT DEFAULT NULL,
-            is_active INTEGER NOT NULL DEFAULT 1 CHECK(is_active IN (0, 1)),
-            FOREIGN KEY (room_id) REFERENCES Rooms(id) ON DELETE CASCADE
-        );
-        """)
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS roommoves (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            booking_id INTEGER NOT NULL,
-            old_room_id INTEGER NOT NULL,
-            new_room_id INTEGER NOT NULL,
-            reason TEXT NOT NULL,
-            relocated_by TEXT NOT NULL DEFAULT 'Front Desk Duty Manager',
-            keycards_reassigned INTEGER NOT NULL DEFAULT 0,
-            relocated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (booking_id) REFERENCES Bookings(id) ON DELETE CASCADE,
-            FOREIGN KEY (old_room_id) REFERENCES Rooms(id) ON DELETE CASCADE,
-            FOREIGN KEY (new_room_id) REFERENCES Rooms(id) ON DELETE CASCADE
-        );
-        """)
-        conn.commit()
-    else:
         try:
-            cursor.execute("""
-            CREATE TABLE IF NOT EXISTS roomlockouts (
-                id SERIAL PRIMARY KEY,
-                room_id INTEGER NOT NULL REFERENCES Rooms(id) ON DELETE CASCADE,
-                lockout_type VARCHAR(50) NOT NULL DEFAULT 'Out_of_Order',
-                reason VARCHAR(255) NOT NULL,
-                assigned_trade VARCHAR(100) DEFAULT 'General Maintenance',
-                expected_completion VARCHAR(50) DEFAULT NULL,
-                authorized_by VARCHAR(100) NOT NULL DEFAULT 'Duty Manager',
-                notes TEXT DEFAULT '',
-                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-                resolved_at TIMESTAMPTZ DEFAULT NULL,
-                resolved_by VARCHAR(100) DEFAULT NULL,
-                resolution_notes TEXT DEFAULT NULL,
-                is_active BOOLEAN NOT NULL DEFAULT TRUE
-            );
-            """)
-            cursor.execute("""
-            CREATE TABLE IF NOT EXISTS roommoves (
-                id SERIAL PRIMARY KEY,
-                booking_id INTEGER NOT NULL REFERENCES Bookings(id) ON DELETE CASCADE,
-                old_room_id INTEGER NOT NULL REFERENCES Rooms(id) ON DELETE CASCADE,
-                new_room_id INTEGER NOT NULL REFERENCES Rooms(id) ON DELETE CASCADE,
-                reason VARCHAR(255) NOT NULL,
-                relocated_by VARCHAR(100) NOT NULL DEFAULT 'Front Desk Duty Manager',
-                keycards_reassigned INTEGER NOT NULL DEFAULT 0,
-                relocated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-            );
-            """)
+            cursor = conn.cursor()
+            cursor.execute("ALTER TABLE public.rooms ADD COLUMN IF NOT EXISTS lock_reason TEXT DEFAULT NULL;")
             conn.commit()
-        except Exception as e:
+        except Exception:
             try:
                 conn.rollback()
             except Exception:
                 pass
-            print(f"ensure_room_operations_tables postgres note: {e}")
+        return
+    cursor = conn.cursor()
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS roomlockouts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        room_id INTEGER NOT NULL,
+        lockout_type TEXT NOT NULL DEFAULT 'Out_of_Order' CHECK(lockout_type IN ('Out_of_Order', 'Out_of_Service', 'Emergency_Repair')),
+        reason TEXT NOT NULL,
+        assigned_trade TEXT DEFAULT 'General Maintenance',
+        expected_completion TEXT DEFAULT NULL,
+        authorized_by TEXT NOT NULL DEFAULT 'Duty Manager',
+        notes TEXT DEFAULT '',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        resolved_at TIMESTAMP DEFAULT NULL,
+        resolved_by TEXT DEFAULT NULL,
+        resolution_notes TEXT DEFAULT NULL,
+        is_active INTEGER NOT NULL DEFAULT 1 CHECK(is_active IN (0, 1)),
+        FOREIGN KEY (room_id) REFERENCES Rooms(id) ON DELETE CASCADE
+    );
+    """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS roommoves (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        booking_id INTEGER NOT NULL,
+        old_room_id INTEGER NOT NULL,
+        new_room_id INTEGER NOT NULL,
+        reason TEXT NOT NULL,
+        relocated_by TEXT NOT NULL DEFAULT 'Front Desk Duty Manager',
+        keycards_reassigned INTEGER NOT NULL DEFAULT 0,
+        relocated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (booking_id) REFERENCES Bookings(id) ON DELETE CASCADE,
+        FOREIGN KEY (old_room_id) REFERENCES Rooms(id) ON DELETE CASCADE,
+        FOREIGN KEY (new_room_id) REFERENCES Rooms(id) ON DELETE CASCADE
+    );
+    """)
+    conn.commit()
+
+
+def get_rooms_columns(conn: sqlite3.Connection) -> set:
+    """Returns the set of column names currently present on the Rooms table."""
+    cursor = conn.cursor()
+    if not IS_POSTGRES:
+        try:
+            cursor.execute("PRAGMA table_info(Rooms);")
+            return {r[1] for r in cursor.fetchall()}
+        except Exception:
+            return set()
+    else:
+        try:
+            cursor.execute("SELECT column_name FROM information_schema.columns WHERE lower(table_name) = 'rooms';")
+            return {r["column_name"] if isinstance(r, dict) or hasattr(r, "keys") else r[0] for r in cursor.fetchall()}
+        except Exception:
+            return set()
 
 
 def row_to_room_lockout_response(r) -> RoomLockoutResponse:
@@ -5837,10 +5822,22 @@ def declare_room_lockout(
         )
         new_lockout_id = cursor.lastrowid
 
-        cursor.execute(
-            "UPDATE Rooms SET status = 'Maintenance', lock_reason = ?, cleanliness_status = 'Dirty' WHERE id = ?;",
-            (payload.reason.strip(), room_id),
-        )
+        r_cols = get_rooms_columns(conn)
+        if "lock_reason" in r_cols and "cleanliness_status" in r_cols:
+            cursor.execute(
+                "UPDATE Rooms SET status = 'Maintenance', lock_reason = ?, cleanliness_status = 'Dirty' WHERE id = ?;",
+                (payload.reason.strip(), room_id),
+            )
+        elif "lock_reason" in r_cols:
+            cursor.execute(
+                "UPDATE Rooms SET status = 'Maintenance', lock_reason = ? WHERE id = ?;",
+                (payload.reason.strip(), room_id),
+            )
+        else:
+            cursor.execute(
+                "UPDATE Rooms SET status = 'Maintenance' WHERE id = ?;",
+                (room_id,),
+            )
 
         record_audit_log(
             conn,
@@ -5947,10 +5944,22 @@ def release_room_lockout(
         ),
     )
 
-    cursor.execute(
-        "UPDATE Rooms SET status = 'Cleaning', lock_reason = NULL, cleanliness_status = ? WHERE id = ?;",
-        (target_clean, room_id),
-    )
+    r_cols = get_rooms_columns(conn)
+    if "lock_reason" in r_cols and "cleanliness_status" in r_cols:
+        cursor.execute(
+            "UPDATE Rooms SET status = 'Cleaning', lock_reason = NULL, cleanliness_status = ? WHERE id = ?;",
+            (target_clean, room_id),
+        )
+    elif "cleanliness_status" in r_cols:
+        cursor.execute(
+            "UPDATE Rooms SET status = 'Cleaning', cleanliness_status = ? WHERE id = ?;",
+            (target_clean, room_id),
+        )
+    else:
+        cursor.execute(
+            "UPDATE Rooms SET status = 'Cleaning' WHERE id = ?;",
+            (room_id,),
+        )
 
     record_audit_log(
         conn,
@@ -6104,15 +6113,34 @@ def execute_room_move(
 
     old_room_new_status = "Maintenance" if payload.old_room_lockout else "Cleaning"
     old_lock_reason = f"Vacated on guest room move: {payload.reason.strip()}" if payload.old_room_lockout else None
-    cursor.execute(
-        "UPDATE Rooms SET status = ?, lock_reason = ?, cleanliness_status = 'Dirty' WHERE id = ?;",
-        (old_room_new_status, old_lock_reason, old_room_id),
-    )
-
-    cursor.execute(
-        "UPDATE Rooms SET status = 'Occupied', lock_reason = NULL WHERE id = ?;",
-        (new_room_id,),
-    )
+    r_cols = get_rooms_columns(conn)
+    if "lock_reason" in r_cols and "cleanliness_status" in r_cols:
+        cursor.execute(
+            "UPDATE Rooms SET status = ?, lock_reason = ?, cleanliness_status = 'Dirty' WHERE id = ?;",
+            (old_room_new_status, old_lock_reason, old_room_id),
+        )
+        cursor.execute(
+            "UPDATE Rooms SET status = 'Occupied', lock_reason = NULL WHERE id = ?;",
+            (new_room_id,),
+        )
+    elif "lock_reason" in r_cols:
+        cursor.execute(
+            "UPDATE Rooms SET status = ?, lock_reason = ? WHERE id = ?;",
+            (old_room_new_status, old_lock_reason, old_room_id),
+        )
+        cursor.execute(
+            "UPDATE Rooms SET status = 'Occupied', lock_reason = NULL WHERE id = ?;",
+            (new_room_id,),
+        )
+    else:
+        cursor.execute(
+            "UPDATE Rooms SET status = ? WHERE id = ?;",
+            (old_room_new_status, old_room_id),
+        )
+        cursor.execute(
+            "UPDATE Rooms SET status = 'Occupied' WHERE id = ?;",
+            (new_room_id,),
+        )
 
     reassigned_count = 0
     if payload.transfer_keycards:

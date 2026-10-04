@@ -729,6 +729,36 @@ function setupEventListeners() {
 
   const moveForm = document.getElementById("roomMoveForm");
   if (moveForm) moveForm.addEventListener("submit", handleRoomMoveSubmit);
+
+  // Module 8: Revenue Intelligence & Forward Forecast
+  const btnOpenAnalytics = document.getElementById("btnOpenAnalyticsModal");
+  if (btnOpenAnalytics) btnOpenAnalytics.addEventListener("click", openAnalyticsModal);
+
+  const btnCloseAnalytics = document.getElementById("btnCloseAnalyticsModal");
+  if (btnCloseAnalytics) btnCloseAnalytics.addEventListener("click", closeAnalyticsModal);
+
+  const analyticsModal = document.getElementById("analyticsModal");
+  if (analyticsModal) {
+    analyticsModal.addEventListener("click", (e) => {
+      if (e.target === analyticsModal) closeAnalyticsModal();
+    });
+  }
+
+  const btnRefreshAnalytics = document.getElementById("btnRefreshAnalytics");
+  if (btnRefreshAnalytics) btnRefreshAnalytics.addEventListener("click", () => fetchAnalyticsDashboard(_currentAnalyticsHorizon));
+
+  const kpiOccEl = document.getElementById("kpiOccupancy");
+  if (kpiOccEl) {
+    kpiOccEl.style.cursor = "pointer";
+    kpiOccEl.title = "Click to view revenue intelligence & forecast";
+    kpiOccEl.addEventListener("click", openAnalyticsModal);
+  }
+  const kpiRevEl = document.getElementById("kpiRevenue");
+  if (kpiRevEl) {
+    kpiRevEl.style.cursor = "pointer";
+    kpiRevEl.title = "Click to view revenue intelligence & forecast";
+    kpiRevEl.addEventListener("click", openAnalyticsModal);
+  }
 }
 
 
@@ -4160,5 +4190,166 @@ async function handleRoomMoveSubmit(e) {
     showToast("Relocation failed: " + err.message, "error");
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = "Execute Relocation"; }
+  }
+}
+
+
+// ==============================================================================
+// Module 8: Revenue Intelligence, Forward Forecast & Category Yield Engine
+// ==============================================================================
+
+let _currentAnalyticsHorizon = 7;
+
+function openAnalyticsModal() {
+  const modal = document.getElementById("analyticsModal");
+  if (!modal) return;
+  modal.style.display = "flex";
+  initHorizonButtons();
+  fetchAnalyticsDashboard(_currentAnalyticsHorizon);
+}
+
+function closeAnalyticsModal() {
+  const modal = document.getElementById("analyticsModal");
+  if (modal) modal.style.display = "none";
+}
+
+function initHorizonButtons() {
+  const group = document.getElementById("forecastHorizonGroup");
+  if (!group || group._initDone) return;
+  group._initDone = true;
+
+  group.addEventListener("click", (e) => {
+    const btn = e.target.closest(".horizon-btn");
+    if (!btn) return;
+    group.querySelectorAll(".horizon-btn").forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+    _currentAnalyticsHorizon = parseInt(btn.dataset.days || "7", 10);
+    fetchForecastOnly(_currentAnalyticsHorizon);
+  });
+}
+
+async function fetchAnalyticsDashboard(days = 7) {
+  _currentAnalyticsHorizon = days;
+  await Promise.all([
+    fetchForecastOnly(days),
+    fetchRoomTypeYield(),
+    fetchStayMetrics(),
+  ]);
+}
+
+async function fetchForecastOnly(days = 7) {
+  const badge = document.getElementById("forecastTimelineBadge");
+  if (badge) badge.textContent = `${days} Days`;
+
+  const container = document.getElementById("forecastGridContainer");
+  if (container) container.innerHTML = `<div style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 15px;">Loading forecast projection...</div>`;
+
+  try {
+    const res = await fetch(`/api/analytics/forecast?days=${days}`);
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+
+    const avgEl = document.getElementById("forecastAvgOcc");
+    if (avgEl) avgEl.textContent = `${data.average_projected_occupancy.toFixed(1)}%`;
+
+    const revEl = document.getElementById("forecastTotalRev");
+    if (revEl) revEl.textContent = `$${data.total_projected_revenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+    const peakEl = document.getElementById("forecastPeakDate");
+    if (peakEl) peakEl.textContent = data.peak_occupancy_date || "—";
+
+    renderForecastCards(data.daily_forecasts, data.total_active_capacity);
+  } catch (err) {
+    if (container) container.innerHTML = `<div style="grid-column: 1/-1; color: #f43f5e; padding: 10px;">Failed to load forecast: ${err.message}</div>`;
+  }
+}
+
+function renderForecastCards(dailyForecasts, capacity) {
+  const container = document.getElementById("forecastGridContainer");
+  if (!container) return;
+  container.innerHTML = "";
+
+  dailyForecasts.forEach((d) => {
+    const card = document.createElement("div");
+    card.style.cssText = "background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px 8px; text-align: center; display: flex; flex-direction: column; gap: 6px; transition: transform 0.15s ease;";
+    card.onmouseenter = () => { card.style.transform = "translateY(-2px)"; card.style.borderColor = "rgba(99,102,241,0.5)"; };
+    card.onmouseleave = () => { card.style.transform = "none"; card.style.borderColor = "var(--border-color)"; };
+
+    const occRate = d.projected_occupancy_rate;
+    const barColor = occRate >= 80 ? "#f59e0b" : occRate >= 40 ? "#10b981" : "#6366f1";
+
+    const dateParts = d.date.split("-");
+    const shortDate = `${dateParts[1]}/${dateParts[2]}`;
+
+    card.innerHTML = `
+      <div style="font-size: 11px; font-weight: 600; color: var(--text-muted);">${d.day_of_week.substring(0, 3)}</div>
+      <div style="font-size: 12px; font-weight: 700;">${shortDate}</div>
+      <div style="background: rgba(255,255,255,0.06); height: 6px; border-radius: 3px; overflow: hidden; margin: 4px 0;">
+        <div style="width: ${Math.min(occRate, 100)}%; height: 100%; background: ${barColor}; border-radius: 3px; transition: width 0.3s ease;"></div>
+      </div>
+      <div style="font-size: 13px; font-weight: 700; color: ${barColor};">${occRate}%</div>
+      <div style="font-size: 10px; color: var(--text-muted);">${d.projected_occupied}/${capacity} rooms</div>
+      <div style="font-size: 11px; font-weight: 600; color: #818cf8; margin-top: 2px;">$${d.projected_revenue.toFixed(0)}</div>
+    `;
+    container.appendChild(card);
+  });
+}
+
+async function fetchRoomTypeYield() {
+  const tbody = document.getElementById("roomTypeYieldTbody");
+  if (!tbody) return;
+  tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 15px;">Loading room categories...</td></tr>`;
+
+  try {
+    const res = await fetch("/api/analytics/room-types");
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+
+    tbody.innerHTML = "";
+    data.categories.forEach((cat) => {
+      const tr = document.createElement("tr");
+      tr.style.borderBottom = "1px solid rgba(255,255,255,0.04)";
+
+      const occColor = cat.occupancy_rate >= 80 ? "#f59e0b" : cat.occupancy_rate >= 40 ? "#10b981" : "var(--text-muted)";
+
+      tr.innerHTML = `
+        <td style="padding: 10px 14px; font-weight: 600;">${cat.room_type}</td>
+        <td style="padding: 10px 14px;">${cat.inventory_count}</td>
+        <td style="padding: 10px 14px; color: #10b981; font-weight: 600;">${cat.occupied_count}</td>
+        <td style="padding: 10px 14px;">${cat.available_count}</td>
+        <td style="padding: 10px 14px;"><span style="color: ${occColor}; font-weight: 700;">${cat.occupancy_rate}%</span></td>
+        <td style="padding: 10px 14px;">$${cat.avg_price_per_night.toFixed(2)}</td>
+        <td style="padding: 10px 14px; font-weight: 600; color: #818cf8;">$${cat.daily_yield.toFixed(2)}</td>
+        <td style="padding: 10px 14px; font-weight: 700; color: #38bdf8;">$${cat.revpar.toFixed(2)}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="8" style="color: #f43f5e; padding: 12px;">Failed to load categories: ${err.message}</td></tr>`;
+  }
+}
+
+async function fetchStayMetrics() {
+  try {
+    const res = await fetch("/api/analytics/stay-metrics");
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+
+    const alosEl = document.getElementById("stayAlos");
+    if (alosEl) alosEl.textContent = `${data.average_length_of_stay.toFixed(1)} nights`;
+
+    const cancelRateEl = document.getElementById("stayCancellationRate");
+    if (cancelRateEl) cancelRateEl.textContent = `${data.cancellation_rate_percent.toFixed(1)}%`;
+
+    const cancelCountEl = document.getElementById("stayCancelledCount");
+    if (cancelCountEl) cancelCountEl.textContent = `${data.cancelled_bookings} cancelled bookings`;
+
+    const repRateEl = document.getElementById("stayRepeatRate");
+    if (repRateEl) repRateEl.textContent = `${data.repeat_guest_rate_percent.toFixed(1)}%`;
+
+    const repCountEl = document.getElementById("stayRepeatCount");
+    if (repCountEl) repCountEl.textContent = `${data.repeat_guest_count} repeat guests`;
+  } catch (err) {
+    console.error("Stay metrics error:", err);
   }
 }

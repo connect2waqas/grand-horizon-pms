@@ -87,6 +87,10 @@
           Room Ops (OOO & Moves)
         </button>
 
+        <button id="btnOpenAnalyticsModal" class="btn btn-secondary" style="font-size: 11.5px; padding: 5px 10px; background: rgba(99,102,241,0.15); border-color: rgba(99,102,241,0.3); color: #818cf8;" title="View Revenue Forecast & Category Yield Analytics">
+          Revenue & Forecast
+        </button>
+
         <span class="status-badge" id="apiStatusBadge">
           <span class="status-dot"></span>
           <span>FastAPI Connected</span>
@@ -1859,6 +1863,109 @@
           <button type="submit" id="btnSubmitRoomMove" class="btn btn-primary" style="background: #f59e0b; border-color: #f59e0b;">Execute Relocation</button>
         </div>
       </form>
+    </div>
+  <!-- Module 8 Modal: Revenue Intelligence & Forward Forecast Cockpit -->
+  <div id="analyticsModal" class="modal-overlay" style="display: none;">
+    <div class="modal-content" style="max-width: 900px; width: 95%;">
+      <div class="modal-header">
+        <div>
+          <h3 class="modal-title">Revenue Intelligence & Forward Pacing Forecast</h3>
+          <p style="font-size: 12px; color: var(--text-muted); margin-top: 3px;">
+            Forward-looking occupancy pacing, category yield analytics, and guest stay velocity
+          </p>
+        </div>
+        <button type="button" id="btnCloseAnalyticsModal" class="btn-close" aria-label="Close modal">&times;</button>
+      </div>
+
+      <div class="modal-body" style="padding: 20px; display: flex; flex-direction: column; gap: 20px;">
+        <!-- Top Horizon Bar & Key Aggregate Figures -->
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 10px; padding: 14px 18px;">
+          <div style="display: flex; gap: 18px; align-items: center;">
+            <div>
+              <span style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.5px;">Avg Projected Occupancy</span>
+              <div id="forecastAvgOcc" style="font-size: 22px; font-weight: 700; color: #10b981;">—%</div>
+            </div>
+            <div style="width: 1px; height: 35px; background: var(--border-color);"></div>
+            <div>
+              <span style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.5px;">Total Projected Revenue</span>
+              <div id="forecastTotalRev" style="font-size: 22px; font-weight: 700; color: #6366f1;">$—</div>
+            </div>
+            <div style="width: 1px; height: 35px; background: var(--border-color);"></div>
+            <div>
+              <span style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.5px;">Peak Demand Date</span>
+              <div id="forecastPeakDate" style="font-size: 16px; font-weight: 600; color: #f59e0b; margin-top: 4px;">—</div>
+            </div>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 12px; color: var(--text-muted);">Pacing Horizon:</span>
+            <div class="btn-group" role="group" id="forecastHorizonGroup" style="display: flex; gap: 4px;">
+              <button type="button" class="btn btn-secondary btn-sm horizon-btn active" data-days="7" style="padding: 4px 10px; font-size: 11px;">7 Days</button>
+              <button type="button" class="btn btn-secondary btn-sm horizon-btn" data-days="14" style="padding: 4px 10px; font-size: 11px;">14 Days</button>
+              <button type="button" class="btn btn-secondary btn-sm horizon-btn" data-days="30" style="padding: 4px 10px; font-size: 11px;">30 Days</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 1: Forward-Looking Day-by-Day Forecast Grid -->
+        <div>
+          <h4 style="font-size: 13.5px; font-weight: 600; margin-bottom: 10px; display: flex; align-items: center; gap: 8px;">
+            <span>Forward Pacing Timeline</span>
+            <span id="forecastTimelineBadge" class="badge" style="background: rgba(99,102,241,0.15); color: #818cf8; font-size: 11px; padding: 2px 6px; border-radius: 4px;">7 Days</span>
+          </h4>
+          <div id="forecastGridContainer" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px;">
+            <!-- Rendered by JS -->
+          </div>
+        </div>
+
+        <!-- Section 2: Room Category Yield Breakdown Table -->
+        <div>
+          <h4 style="font-size: 13.5px; font-weight: 600; margin-bottom: 10px;">Room Category Yield & RevPAR Matrix</h4>
+          <div style="overflow-x: auto; border: 1px solid var(--border-color); border-radius: 8px;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 12px; text-align: left;">
+              <thead style="background: rgba(255,255,255,0.02); border-bottom: 1px solid var(--border-color);">
+                <tr>
+                  <th style="padding: 10px 14px;">Category</th>
+                  <th style="padding: 10px 14px;">Inventory</th>
+                  <th style="padding: 10px 14px;">Occupied</th>
+                  <th style="padding: 10px 14px;">Available</th>
+                  <th style="padding: 10px 14px;">Occupancy %</th>
+                  <th style="padding: 10px 14px;">Nominal Rate</th>
+                  <th style="padding: 10px 14px;">Daily Yield</th>
+                  <th style="padding: 10px 14px;">RevPAR</th>
+                </tr>
+              </thead>
+              <tbody id="roomTypeYieldTbody">
+                <!-- Rendered by JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Section 3: Guest Velocity & Stay Distribution -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px;">
+          <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px 14px;">
+            <div style="font-size: 11px; text-transform: uppercase; color: var(--text-muted);">Avg Length of Stay (ALOS)</div>
+            <div id="stayAlos" style="font-size: 20px; font-weight: 700; margin-top: 4px; color: #38bdf8;">— nights</div>
+            <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">Average duration per booking</div>
+          </div>
+          <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px 14px;">
+            <div style="font-size: 11px; text-transform: uppercase; color: var(--text-muted);">Cancellation Rate</div>
+            <div id="stayCancellationRate" style="font-size: 20px; font-weight: 700; margin-top: 4px; color: #f43f5e;">—%</div>
+            <div id="stayCancelledCount" style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">— cancelled bookings</div>
+          </div>
+          <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px 14px;">
+            <div style="font-size: 11px; text-transform: uppercase; color: var(--text-muted);">Repeat Guest Loyalty</div>
+            <div id="stayRepeatRate" style="font-size: 20px; font-weight: 700; margin-top: 4px; color: #a855f7;">—%</div>
+            <div id="stayRepeatCount" style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">— multi-stay customers</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; padding: 14px 20px;">
+        <span style="font-size: 11px; color: var(--text-muted);">Real-time revenue management computations synchronized with PMS ledger</span>
+        <button type="button" id="btnRefreshAnalytics" class="btn btn-secondary" style="font-size: 12px;">Refresh Metrics</button>
+      </div>
     </div>
   </div>
 

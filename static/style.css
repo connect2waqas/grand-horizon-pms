@@ -987,42 +987,43 @@ input::-webkit-calendar-picker-indicator {
 }
 
 .quick-action-label {
-  font-size: 10px;
-  font-weight: 600;
+  font-size: 9.5px;
+  font-weight: 700;
   color: #94a3b8;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
   display: flex;
   align-items: center;
   gap: 4px;
 }
 
 .quick-action-select {
-  background-color: #0f172a !important;
+  background-color: #0b1120 !important;
   color: #f1f5f9 !important;
-  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
   border-radius: 6px !important;
-  padding: 4px 8px;
-  min-height: 30px;
-  height: 30px;
-  font-size: 11px;
-  font-weight: 500;
+  padding: 4px 6px !important;
+  min-height: 28px !important;
+  height: 28px !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
   cursor: pointer;
   outline: none;
-  width: 100%;
-  box-sizing: border-box;
+  width: 100% !important;
+  box-sizing: border-box !important;
   transition: all 0.15s ease;
-  min-width: 0;
+  min-width: 0 !important;
+  display: block !important;
 }
 
 .quick-action-select:hover {
-  border-color: rgba(99, 102, 241, 0.5) !important;
+  border-color: rgba(99, 102, 241, 0.6) !important;
   background-color: #1e293b !important;
 }
 
 .quick-action-select:focus {
   border-color: #6366f1 !important;
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25) !important;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.3) !important;
 }
 
 .card-quick-actions .btn-lockout-room,

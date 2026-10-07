@@ -186,6 +186,8 @@ document.addEventListener("DOMContentLoaded", () => {
   fetchTaxRules();
   setupEventListeners();
   initPWAInstall();
+  initNavigationViews();
+  initLiveShiftClock();
 });
 
 function setupInitialDates() {
@@ -784,16 +786,16 @@ async function fetchKPIs() {
     }
 
     if (kpiInventorySub) {
-      kpiInventorySub.textContent = `${data.available_rooms} Avail • ${data.occupied_rooms} Occ • ${data.cleaning_rooms} Clean • ${data.maintenance_rooms} Maint`;
+      kpiInventorySub.textContent = `${data.available_rooms} Free • ${data.occupied_rooms} Occupied • ${data.cleaning_rooms} Cleaning • ${data.maintenance_rooms} Under Repair`;
     }
     if (kpiAdrRevpar) {
-      kpiAdrRevpar.textContent = `ADR $${data.adr.toFixed(2)} • RevPAR $${data.revpar.toFixed(2)}`;
+      kpiAdrRevpar.textContent = `Avg Rate $${data.adr.toFixed(2)} • Daily Rev/Room $${data.revpar.toFixed(2)}`;
     }
     if (kpiTurnoverSub) {
-      kpiTurnoverSub.textContent = `${data.today_checkins} Arrival${data.today_checkins === 1 ? '' : 's'} • ${data.today_checkouts} Departure${data.today_checkouts === 1 ? '' : 's'}`;
+      kpiTurnoverSub.textContent = `${data.today_checkins} Check-in${data.today_checkins === 1 ? '' : 's'} • ${data.today_checkouts} Check-out${data.today_checkouts === 1 ? '' : 's'}`;
     }
     if (kpiMonthlyRev) {
-      kpiMonthlyRev.textContent = `Total: $${data.total_revenue.toLocaleString("en-US", { minimumFractionDigits: 2 })} • Month: $${data.monthly_revenue.toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
+      kpiMonthlyRev.textContent = `Total: $${data.total_revenue.toLocaleString("en-US", { minimumFractionDigits: 2 })} • This Month: $${data.monthly_revenue.toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
     }
   } catch (err) {
     console.warn("KPI load fallback:", err);
@@ -4470,4 +4472,139 @@ function initPWAInstall() {
       }
     });
   }
+}
+
+
+// ==============================================================================
+// Full-Stack SaaS Navigation Controller & Live Shift Clock
+// ==============================================================================
+
+function initNavigationViews() {
+  const navItems = document.querySelectorAll(".sidebar-nav-item[data-view]");
+  const viewSections = document.querySelectorAll(".view-section");
+  const breadcrumb = document.getElementById("topbarBreadcrumb");
+  const sidebar = document.getElementById("appSidebar");
+  const backdrop = document.getElementById("sidebarBackdrop");
+  const toggleBtn = document.getElementById("btnSidebarToggle");
+
+  const viewTitles = {
+    viewRooms: "Grand Horizon / Rooms & Booking",
+    viewReservations: "Grand Horizon / Front Desk & Stays",
+    viewHousekeeping: "Grand Horizon / Housekeeping & Cleaning",
+    viewMaintenance: "Grand Horizon / Repairs & Maintenance",
+    viewGuests: "Grand Horizon / Guest Directory (CRM)",
+    viewKeycards: "Grand Horizon / Key Cards & Digital Access",
+    viewAudit: "Grand Horizon / Activity History & Staff Log",
+  };
+
+  function activateView(targetViewId) {
+    if (!targetViewId) return;
+    navItems.forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.view === targetViewId);
+    });
+    viewSections.forEach((sec) => {
+      sec.classList.toggle("active", sec.id === targetViewId);
+    });
+    if (breadcrumb && viewTitles[targetViewId]) {
+      breadcrumb.textContent = viewTitles[targetViewId];
+    }
+    if (sidebar) sidebar.classList.remove("open");
+    if (backdrop) backdrop.classList.remove("active");
+  }
+
+  navItems.forEach((item) => {
+    item.addEventListener("click", () => {
+      activateView(item.dataset.view);
+    });
+  });
+
+  const navAnalytics = document.getElementById("navSidebarAnalytics");
+  if (navAnalytics) {
+    navAnalytics.addEventListener("click", () => {
+      if (typeof openAnalyticsModal === "function") openAnalyticsModal();
+      if (sidebar) sidebar.classList.remove("open");
+      if (backdrop) backdrop.classList.remove("active");
+    });
+  }
+
+  const navRoomOps = document.getElementById("navSidebarRoomOps");
+  if (navRoomOps) {
+    navRoomOps.addEventListener("click", () => {
+      if (typeof openRoomOpsModal === "function") openRoomOpsModal();
+      if (sidebar) sidebar.classList.remove("open");
+      if (backdrop) backdrop.classList.remove("active");
+    });
+  }
+
+  const navFinance = document.getElementById("navSidebarFinance");
+  if (navFinance) {
+    navFinance.addEventListener("click", () => {
+      if (typeof openFinanceModal === "function") openFinanceModal();
+      if (sidebar) sidebar.classList.remove("open");
+      if (backdrop) backdrop.classList.remove("active");
+    });
+  }
+
+  const btnQuickBook = document.getElementById("btnQuickNewBooking");
+  if (btnQuickBook) {
+    btnQuickBook.addEventListener("click", () => {
+      activateView("viewRooms");
+      const formEl = document.getElementById("bookingForm");
+      if (formEl) formEl.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
+
+  if (toggleBtn && sidebar && backdrop) {
+    toggleBtn.addEventListener("click", () => {
+      sidebar.classList.toggle("open");
+      backdrop.classList.toggle("active");
+    });
+    backdrop.addEventListener("click", () => {
+      sidebar.classList.remove("open");
+      backdrop.classList.remove("active");
+    });
+  }
+
+  const urlParams = new URLSearchParams(window.location.search);
+  const tabParam = urlParams.get("tab");
+  if (tabParam) {
+    const tabMap = {
+      rooms: "viewRooms",
+      frontdesk: "viewReservations",
+      reservations: "viewReservations",
+      housekeeping: "viewHousekeeping",
+      maintenance: "viewMaintenance",
+      guests: "viewGuests",
+      keycards: "viewKeycards",
+      audit: "viewAudit",
+    };
+    if (tabMap[tabParam]) {
+      activateView(tabMap[tabParam]);
+    } else if (tabParam === "analytics" && typeof openAnalyticsModal === "function") {
+      openAnalyticsModal();
+    } else if (tabParam === "operations" && typeof openRoomOpsModal === "function") {
+      openRoomOpsModal();
+    }
+  }
+}
+
+function initLiveShiftClock() {
+  const clockEl = document.getElementById("liveClockText");
+  if (!clockEl) return;
+
+  function update() {
+    const now = new Date();
+    const options = {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    };
+    const timeStr = now.toLocaleDateString("en-US", options);
+    clockEl.textContent = `${timeStr} • Shift Active`;
+  }
+  update();
+  setInterval(update, 1000);
 }

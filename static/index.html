@@ -20,116 +20,258 @@
 <body>
 
   <!-- Enterprise SaaS Header -->
-  <header class="app-header">
-    <div class="header-container">
-      <div class="brand">
-        <div class="brand-logo" aria-label="Grand Horizon Luxury Resort Emblem">
-          <svg class="brand-logo-svg" width="40" height="40" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <defs>
-              <linearGradient id="headerGoldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="#FDE68A"/>
-                <stop offset="40%" stop-color="#F59E0B"/>
-                <stop offset="100%" stop-color="#D97706"/>
-              </linearGradient>
-              <linearGradient id="headerIndigoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="#A5B4FC"/>
-                <stop offset="50%" stop-color="#6366F1"/>
-                <stop offset="100%" stop-color="#4338CA"/>
-              </linearGradient>
-              <linearGradient id="headerShieldGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stop-color="#1E293B"/>
-                <stop offset="100%" stop-color="#0B1120"/>
-              </linearGradient>
-            </defs>
-            <!-- Badge Frame with Gold Trim -->
-            <rect x="2" y="2" width="44" height="44" rx="12" fill="url(#headerShieldGrad)" stroke="url(#headerGoldGrad)" stroke-width="1.8"/>
-            <!-- Radiant Horizon Sun -->
-            <circle cx="24" cy="22" r="5" fill="url(#headerGoldGrad)" opacity="0.95"/>
-            <!-- Sunburst Radiance Rays -->
-            <path d="M24 11V14M24 30V33M13 22H16M32 22H35M16.2 14.2L18.3 16.3M29.7 27.7L31.8 29.8M16.2 29.8L18.3 27.7M29.7 16.3L31.8 14.2" stroke="url(#headerGoldGrad)" stroke-width="1.2" stroke-linecap="round" opacity="0.6"/>
-            <!-- Architectural Arch Pavilion -->
-            <path d="M14 34V26C14 20.4772 18.4772 16 24 16C29.5228 16 34 20.4772 34 26V34" stroke="url(#headerGoldGrad)" stroke-width="2" stroke-linecap="round"/>
-            <path d="M19 34V27C19 24.2386 21.2386 22 24 22C26.7614 22 29 24.2386 29 27V34" stroke="url(#headerIndigoGrad)" stroke-width="1.8" stroke-linecap="round"/>
-            <!-- Foundation Base -->
-            <path d="M10 35H38" stroke="url(#headerGoldGrad)" stroke-width="2" stroke-linecap="round"/>
-            <path d="M14 38H34" stroke="url(#headerIndigoGrad)" stroke-width="1.5" stroke-linecap="round" opacity="0.8"/>
-            <!-- 5-Star Luxury Star Apex -->
-            <polygon points="24,5.5 25.5,9.5 29.5,10 26.5,13 27.5,17 24,15 20.5,17 21.5,13 18.5,10 22.5,9.5" fill="url(#headerGoldGrad)"/>
-          </svg>
-        </div>
-        <div class="brand-meta">
-          <div class="brand-title-row">
-            <span class="brand-title">Grand Horizon</span>
-            <span class="brand-tier-badge">5-STAR LUXURY</span>
+    <!-- Full-Stack SaaS Application Shell -->
+  <div class="app-shell">
+    
+    <!-- Left Navigation Sidebar -->
+    <aside class="app-sidebar" id="appSidebar">
+      <div>
+        <!-- Sidebar Brand Emblem -->
+        <div class="sidebar-brand-box">
+          <div class="brand-logo" aria-label="Grand Horizon Luxury Resort Emblem">
+            <svg class="brand-logo-svg" width="36" height="36" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <linearGradient id="sbGoldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#FDE68A"/>
+                  <stop offset="40%" stop-color="#F59E0B"/>
+                  <stop offset="100%" stop-color="#D97706"/>
+                </linearGradient>
+                <linearGradient id="sbIndigoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#A5B4FC"/>
+                  <stop offset="50%" stop-color="#6366F1"/>
+                  <stop offset="100%" stop-color="#4338CA"/>
+                </linearGradient>
+                <linearGradient id="sbShieldGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" stop-color="#1E293B"/>
+                  <stop offset="100%" stop-color="#0B1120"/>
+                </linearGradient>
+              </defs>
+              <rect x="2" y="2" width="44" height="44" rx="12" fill="url(#sbShieldGrad)" stroke="url(#sbGoldGrad)" stroke-width="1.8"/>
+              <circle cx="24" cy="22" r="5" fill="url(#sbGoldGrad)" opacity="0.95"/>
+              <path d="M24 11V14M24 30V33M13 22H16M32 22H35M16.2 14.2L18.3 16.3M29.7 27.7L31.8 29.8M16.2 29.8L18.3 27.7M29.7 16.3L31.8 14.2" stroke="url(#sbGoldGrad)" stroke-width="1.2" stroke-linecap="round" opacity="0.6"/>
+              <path d="M14 34V26C14 20.4772 18.4772 16 24 16C29.5228 16 34 20.4772 34 26V34" stroke="url(#sbGoldGrad)" stroke-width="2" stroke-linecap="round"/>
+              <path d="M19 34V27C19 24.2386 21.2386 22 24 22C26.7614 22 29 24.2386 29 27V34" stroke="url(#sbIndigoGrad)" stroke-width="1.8" stroke-linecap="round"/>
+              <path d="M10 35H38" stroke="url(#sbGoldGrad)" stroke-width="2" stroke-linecap="round"/>
+              <path d="M14 38H34" stroke="url(#sbIndigoGrad)" stroke-width="1.5" stroke-linecap="round" opacity="0.8"/>
+              <polygon points="24,5.5 25.5,9.5 29.5,10 26.5,13 27.5,17 24,15 20.5,17 21.5,13 18.5,10 22.5,9.5" fill="url(#sbGoldGrad)"/>
+            </svg>
           </div>
-          <span class="brand-subtitle">Suite & Inventory Management</span>
-        </div>
-      </div>
-      <div class="header-actions">
-        <!-- Global Currency Converter Selector -->
-        <div class="currency-selector-badge" title="Switch Operating Display Currency">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10"></circle>
-            <line x1="2" y1="12" x2="22" y2="12"></line>
-            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
-          </svg>
-          <select id="globalCurrencySelect" aria-label="Select Operating Currency">
-            <option value="USD" selected>USD ($)</option>
-            <option value="EUR">EUR (€)</option>
-            <option value="GBP">GBP (£)</option>
-            <option value="JPY">JPY (¥)</option>
-            <option value="CAD">CAD (C$)</option>
-            <option value="AUD">AUD (A$)</option>
-            <option value="CHF">CHF (CHF)</option>
-          </select>
+          <div class="brand-meta">
+            <div class="brand-title-row">
+              <span class="brand-title" style="font-size: 15px;">Grand Horizon</span>
+              <span class="brand-tier-badge">5-STAR</span>
+            </div>
+            <span class="brand-subtitle" style="font-size: 11px;">Hotel Management System</span>
+          </div>
         </div>
 
-        <button id="btnOpenFinanceModal" class="btn btn-secondary" style="font-size: 11.5px; padding: 5px 10px;" title="View Live Forex Matrix & Tax Rules">
-          Forex & Taxes
-        </button>
+        <!-- Staff Profile Card -->
+        <div class="sidebar-profile-card">
+          <div class="sidebar-avatar">AV</div>
+          <div class="sidebar-profile-meta">
+            <div class="sidebar-user-name">Alice Vance</div>
+            <div class="sidebar-user-role">
+              <span class="sidebar-duty-dot"></span>
+              <span>Front Desk Manager</span>
+            </div>
+          </div>
+        </div>
 
-        <button id="btnOpenRoomOpsModal" class="btn btn-secondary" style="font-size: 11.5px; padding: 5px 10px;" title="View Room Operations Cockpit & Out-of-Order Registry">
-          Room Ops (OOO & Moves)
-        </button>
+        <!-- Navigation Menu -->
+        <nav class="sidebar-nav-container">
+          <div class="sidebar-nav-group-title">Daily Operations</div>
+          <a class="sidebar-nav-item active" data-view="viewRooms" id="navRooms">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 21h18M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16M9 9h1m4 0h1m-6 4h1m4 0h1"></path>
+            </svg>
+            <span>Rooms & Booking</span>
+          </a>
 
-        <button id="btnOpenAnalyticsModal" class="btn btn-secondary" style="font-size: 11.5px; padding: 5px 10px; background: rgba(99,102,241,0.15); border-color: rgba(99,102,241,0.3); color: #818cf8;" title="View Revenue Forecast & Category Yield Analytics">
-          Revenue & Forecast
-        </button>
+          <a class="sidebar-nav-item" data-view="viewReservations" id="navReservations">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+              <line x1="16" y1="2" x2="16" y2="6"></line>
+              <line x1="8" y1="2" x2="8" y2="6"></line>
+              <line x1="3" y1="10" x2="21" y2="10"></line>
+            </svg>
+            <span>Front Desk & Stays</span>
+          </a>
 
-        <button id="btnInstallPWA" class="btn btn-pwa-install" style="font-size: 11.5px; padding: 5px 12px; display: inline-flex; align-items: center; gap: 6px;" title="Install Grand Horizon PMS as a Desktop or Mobile App">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-            <polyline points="7 10 12 15 17 10"></polyline>
-            <line x1="12" y1="15" x2="12" y2="3"></line>
-          </svg>
-          <span id="pwaInstallLabel">Install App</span>
-        </button>
+          <a class="sidebar-nav-item" data-view="viewCleaning in Progress Status" id="navCleaning in Progress Status">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"></path>
+            </svg>
+            <span>Cleaning in Progress Status & Cleaning in Progress</span>
+          </a>
 
-        <span class="status-badge" id="apiStatusBadge">
-          <span class="status-dot"></span>
-          <span>FastAPI Connected</span>
-        </span>
-        <a href="/docs" target="_blank" class="nav-link" title="Open Swagger API documentation">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-            <polyline points="14 2 14 8 20 8"></polyline>
-            <line x1="16" y1="13" x2="8" y2="13"></line>
-            <line x1="16" y1="17" x2="8" y2="17"></line>
-          </svg>
-          API Docs
-        </a>
+          <a class="sidebar-nav-item" data-view="viewMaintenance" id="navMaintenance">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path>
+            </svg>
+            <span>Repairs & Maintenance</span>
+          </a>
+
+          <div class="sidebar-nav-group-title">Guests & Access</div>
+          <a class="sidebar-nav-item" data-view="viewGuests" id="navGuests">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+              <circle cx="9" cy="7" r="4"></circle>
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+              <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+            </svg>
+            <span>Guest Directory (CRM)</span>
+          </a>
+
+          <a class="sidebar-nav-item" data-view="viewKeycards" id="navKeycards">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="5" width="20" height="14" rx="2"></rect>
+              <line x1="2" y1="10" x2="22" y2="10"></line>
+            </svg>
+            <span>Key Cards & Access</span>
+          </a>
+
+          <div class="sidebar-nav-group-title">Reports & Settings</div>
+          <a class="sidebar-nav-item" id="navSidebarAnalytics" href="javascript:void(0);">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="20" x2="18" y2="10"></line>
+              <line x1="12" y1="20" x2="12" y2="4"></line>
+              <line x1="6" y1="20" x2="6" y2="14"></line>
+            </svg>
+            <span>Revenue & Forecast</span>
+          </a>
+
+          <a class="sidebar-nav-item" id="navSidebarRoomOps" href="javascript:void(0);">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line>
+            </svg>
+            <span>Out of Order & Swaps</span>
+          </a>
+
+          <a class="sidebar-nav-item" id="navSidebarFinance" href="javascript:void(0);">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="2" y1="12" x2="22" y2="12"></line>
+              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+            </svg>
+            <span>Currencies & Taxes</span>
+          </a>
+
+          <a class="sidebar-nav-item" data-view="viewAudit" id="navAudit">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <polyline points="12 6 12 12 16 14"></polyline>
+            </svg>
+            <span>Activity History</span>
+          </a>
+        </nav>
       </div>
-    </div>
-  </header>
 
-  <!-- Notification Toast Container -->
-  <div id="toastContainer" class="toast-container" aria-live="polite"></div>
+      <!-- Sidebar Footer -->
+      <div class="sidebar-footer">
+        <div style="display: flex; align-items: center; gap: 6px; color: #34d399; font-weight: 600;">
+          <span class="status-dot" style="width: 7px; height: 7px;"></span>
+          <span>Cloud Database Online</span>
+        </div>
+        <span style="color: var(--text-subtle);">Grand Horizon SaaS v2.5 Enterprise</span>
+      </div>
+    </aside>
 
-  <!-- Main Dashboard Canvas -->
-  <main class="dashboard-canvas">
+    <!-- Mobile Drawer Backdrop -->
+    <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+
+    <!-- Main Viewport Canvas -->
+    <div class="app-main-viewport">
+      
+      <!-- Top Navigation Bar -->
+      <header class="app-topbar">
+        <div class="topbar-left">
+          <button id="btnSidebarToggle" class="btn-sidebar-toggle" aria-label="Toggle menu">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="3" y1="12" x2="21" y2="12"></line>
+              <line x1="3" y1="6" x2="21" y2="6"></line>
+              <line x1="3" y1="18" x2="21" y2="18"></line>
+            </svg>
+          </button>
+          <div class="topbar-breadcrumb" id="topbarBreadcrumb">Grand Horizon / Rooms & Booking</div>
+          <div class="topbar-clock" id="liveShiftClock">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <polyline points="12 6 12 12 16 14"></polyline>
+            </svg>
+            <span id="liveClockText">Live Shift Active</span>
+          </div>
+        </div>
+
+        <div class="topbar-right">
+          <!-- Global Currency Converter Selector -->
+          <div class="currency-selector-badge" title="Switch Operating Display Currency">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="2" y1="12" x2="22" y2="12"></line>
+              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+            </svg>
+            <select id="globalCurrencySelect" aria-label="Select Operating Currency">
+              <option value="USD" selected>USD ($)</option>
+              <option value="EUR">EUR (€)</option>
+              <option value="GBP">GBP (£)</option>
+              <option value="JPY">JPY (¥)</option>
+              <option value="CAD">CAD (C$)</option>
+              <option value="AUD">AUD (A$)</option>
+              <option value="CHF">CHF (CHF)</option>
+            </select>
+          </div>
+
+          <button id="btnOpenFinanceModal" class="btn btn-secondary" style="font-size: 11.5px; padding: 5px 10px; display: none;" title="Currencies & Taxes">
+            Currencies & Taxes
+          </button>
+
+          <button id="btnOpenRoomOpsModal" class="btn btn-secondary" style="font-size: 11.5px; padding: 5px 10px; display: none;" title="Room Operations">
+            Room Ops
+          </button>
+
+          <button id="btnOpenAnalyticsModal" class="btn btn-secondary" style="font-size: 11.5px; padding: 5px 10px; display: none;" title="Revenue Analytics">
+            Revenue Analytics
+          </button>
+
+          <button id="btnQuickNewBooking" class="btn btn-primary" style="font-size: 11.5px; padding: 5px 12px; gap: 5px;" title="Book a new room">
+            <span>+ Book Room</span>
+          </button>
+
+          <button id="btnInstallPWA" class="btn btn-pwa-install" style="font-size: 11.5px; padding: 5px 12px; display: inline-flex; align-items: center; gap: 6px;" title="Install Grand Horizon PMS as a Desktop or Mobile App">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            <span id="pwaInstallLabel">Install App</span>
+          </button>
+
+          <span class="status-badge" id="apiStatusBadge">
+            <span class="status-dot"></span>
+            <span>FastAPI Connected</span>
+          </span>
+
+          <a href="/docs" target="_blank" class="nav-link" title="Open Swagger API documentation">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+            </svg>
+            API Docs
+          </a>
+        </div>
+      </header>
+
+      <!-- Notification Toast Container -->
+      <div id="toastContainer" class="toast-container" aria-live="polite"></div>
+
+      <!-- Main Dashboard Canvas -->
+      <main class="dashboard-canvas">
     
     <!-- Top-Level Executive KPI Bar -->
-    <section class="kpi-grid" aria-label="Key Performance Indicators">
+    <section class="kpi-grid" aria-label="Today's Overview">
       <div class="kpi-card">
         <div class="kpi-header">
           <span class="kpi-title">Total Rooms</span>
@@ -140,7 +282,7 @@
           </div>
         </div>
         <div class="kpi-value" id="kpiTotalRooms">—</div>
-        <span class="kpi-trend" id="kpiInventorySub">Registered inventory</span>
+        <span class="kpi-trend" id="kpiInventorySub">Full hotel inventory</span>
       </div>
 
       <div class="kpi-card">
@@ -153,12 +295,12 @@
           </div>
         </div>
         <div class="kpi-value" id="kpiOccupancy">—</div>
-        <span class="kpi-trend text-emerald" id="kpiAdrRevpar">ADR: — • RevPAR: —</span>
+        <span class="kpi-trend text-emerald" id="kpiAdrRevpar">Avg Rate: — • Daily Rev/Room: —</span>
       </div>
 
       <div class="kpi-card">
         <div class="kpi-header">
-          <span class="kpi-title">Today's Check-ins</span>
+          <span class="kpi-title">Today's Arrivals</span>
           <div class="kpi-icon">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
@@ -169,12 +311,12 @@
           </div>
         </div>
         <div class="kpi-value" id="kpiCheckins">—</div>
-        <span class="kpi-trend text-indigo" id="kpiTurnoverSub">Scheduled arrivals</span>
+        <span class="kpi-trend text-indigo" id="kpiTurnoverSub">Scheduled check-ins</span>
       </div>
 
       <div class="kpi-card">
         <div class="kpi-header">
-          <span class="kpi-title">Est. Revenue</span>
+          <span class="kpi-title">Today's Revenue</span>
           <div class="kpi-icon">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="12" y1="1" x2="12" y2="23"></line>
@@ -187,15 +329,17 @@
       </div>
     </section>
 
-    <!-- Content Row: Left Catalog & Right Form -->
+    <!-- VIEW 1: ROOMS & BOOKING -->
+    <div class="view-section active" id="viewRooms">
+<!-- Content Row: Left Catalog & Right Form -->
     <div class="dashboard-body">
       
       <!-- Left Section: Room Inventory Grid -->
       <section class="inventory-section">
         <div class="section-heading">
           <div class="heading-text">
-            <h1 class="section-title">Rooms & Availability</h1>
-            <p class="section-subtitle">Real-time room availability powered by FastAPI and SQLite.</p>
+            <h1 class="section-title">Room Availability & Live Grid</h1>
+            <p class="section-subtitle">Live hotel rooms, current rates, and instant booking.</p>
           </div>
           <button id="refreshRoomsBtn" class="btn btn-secondary btn-icon" title="Refresh Room Catalog">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -203,7 +347,7 @@
               <polyline points="1 20 1 14 7 14"></polyline>
               <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
             </svg>
-            Refresh Catalog
+            Refresh Rooms
           </button>
         </div>
 
@@ -236,23 +380,23 @@
             </select>
           </div>
           <div class="filter-field">
-            <label for="filterCleanliness">Housekeeping</label>
+            <label for="filterCleanliness">Cleaning in Progress Status</label>
             <select id="filterCleanliness" name="filterCleanliness">
               <option value="">All States</option>
               <option value="Inspected">Inspected (Ready)</option>
-              <option value="Clean">Clean (Pending Audit)</option>
-              <option value="Dirty">Dirty (Needs Turnover)</option>
+              <option value="Clean">Clean</option>
+              <option value="Needs Cleaning in Progress">Needs Cleaning in Progress (Needs Turnover)</option>
               <option value="Touch-up Required">Touch-up Required</option>
             </select>
           </div>
           <div class="filter-field filter-field-checkbox">
             <label for="filterMaintenance" class="checkbox-label">
               <input type="checkbox" id="filterMaintenance" name="filterMaintenance">
-              <span>Show Maintenance</span>
+              <span>Show Under Repair</span>
             </label>
           </div>
           <div class="filter-cta-group">
-            <button id="applyFilterBtn" class="btn btn-secondary">Filter Dates</button>
+            <button id="applyFilterBtn" class="btn btn-secondary">Filter Rooms</button>
             <button id="resetFilterBtn" class="btn btn-ghost">Reset</button>
           </div>
         </div>
@@ -336,8 +480,8 @@
       <aside class="booking-section">
         <div class="booking-panel">
           <div class="panel-header">
-            <h2 class="panel-title">Book a Reservation</h2>
-            <p class="panel-subtitle">Click "Select Room" on any available card to target it.</p>
+            <h2 class="panel-title">Book a Room</h2>
+            <p class="panel-subtitle">Click "Select Room" on any available room card to start booking.</p>
           </div>
 
           <form id="bookingForm" class="booking-form" novalidate>
@@ -348,14 +492,14 @@
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
                 </svg>
-                Auto-Assign Optimal Room
+                Auto-Pick Best Room
               </button>
               <span id="autoAssignBadge" class="auto-assign-badge hidden"></span>
             </div>
 
             <!-- Streamlined Target Room Banner (Replaces redundant dropdown) -->
             <div class="form-control">
-              <label>Target Accommodation <span class="required">*</span></label>
+              <label>Selected Room <span class="required">*</span></label>
               <div class="selected-room-banner" id="selectedRoomBanner">
                 <div class="selected-room-header">
                   <span class="selected-room-pill" id="selectedRoomPill">None</span>
@@ -381,21 +525,21 @@
             <!-- Module 3: Rate Plan & Cancellation Terms -->
             <div class="form-control">
               <div class="rate-plan-header-row">
-                <label for="bookingRatePlan">Rate Plan & Terms <span class="required">*</span></label>
+                <label for="bookingRatePlan">Pricing Deal / Rate Plan <span class="required">*</span></label>
                 <span id="ratePlanBadge" class="rate-plan-badge">BAR • 1.0x</span>
               </div>
               <select id="bookingRatePlan" name="rate_plan_code">
-                <option value="BAR" selected>Best Available Rate (1.0x • Flexible 24h cancellation)</option>
-                <option value="NON_REF">Non-Refundable Saver (0.85x • 15% Off • Deposit Locked)</option>
-                <option value="BB_PACKAGE">Bed & Breakfast Package (1.15x • Includes Continental Breakfast)</option>
-                <option value="CORP_EXTENDED">Extended Stay & Corporate (0.80x • 20% Off • Min 3 Nights)</option>
+                <option value="BAR" selected>Standard Rate (1.0x • Free 24h cancellation)</option>
+                <option value="NON_REF">Saver Deal (0.85x • 15% Off • Non-refundable)</option>
+                <option value="BB_PACKAGE">Breakfast Included Deal (1.15x • Includes breakfast)</option>
+                <option value="CORP_EXTENDED">Long Stay Discount (0.80x • 20% Off • 3+ nights)</option>
               </select>
               <div id="ratePlanPolicyHint" class="rate-plan-hint">
-                <span id="ratePlanPolicyText">Flexible 24h free cancellation • Room Only • Min 1 night</span>
+                <span id="ratePlanPolicyText">Free 24h cancellation • Room Only • Min 1 night</span>
               </div>
             </div>
 
-            <!-- Party Size & Capacity (Module 2 Deepening) -->
+            <!-- Number of Guests (Module 2 Deepening) -->
             <div class="form-row">
               <div class="form-control">
                 <label for="bookingAdults">Adults <span class="required">*</span></label>
@@ -407,17 +551,17 @@
               </div>
             </div>
 
-            <!-- Arrival Time & Guarantee Policy (Module 2 Deepening) -->
+            <!-- Arrival Time & Booking Guarantee (Module 2 Deepening) -->
             <div class="form-row">
               <div class="form-control">
                 <label for="bookingETA">Estimated Arrival (ETA)</label>
                 <input type="time" id="bookingETA" name="estimated_arrival_time" value="15:00">
               </div>
               <div class="form-control">
-                <label for="bookingGuarantee">Guarantee Policy</label>
+                <label for="bookingGuarantee">Booking Guarantee</label>
                 <select id="bookingGuarantee" name="guarantee_type">
-                  <option value="Guaranteed" selected>Guaranteed (Secured)</option>
-                  <option value="Non-Guaranteed">Non-Guaranteed (6 PM Release)</option>
+                  <option value="Guaranteed" selected>Guaranteed (Card on File)</option>
+                  <option value="Non-Guaranteed">Non-Guaranteed (Held until 6 PM)</option>
                   <option value="Deposit Required">Deposit Required</option>
                 </select>
               </div>
@@ -504,13 +648,13 @@
               </div>
               <div class="estimate-meta">
                 <span id="rateCalculation" class="estimate-rate">Select room & dates</span>
-                <span class="estimate-policy" id="pricingEngineStatus">Smart Dynamic Pricing</span>
+                <span class="estimate-policy" id="pricingEngineStatus">Automatic Price Calculation</span>
               </div>
             </div>
 
             <!-- Submit CTA Button -->
             <button type="submit" id="submitBookingBtn" class="btn btn-primary btn-block">
-              <span class="btn-text">Confirm Reservation</span>
+              <span class="btn-text">Confirm & Book Room</span>
               <span class="btn-spinner hidden"></span>
             </button>
           </form>
@@ -519,12 +663,16 @@
 
     </div>
 
-    <!-- Front Desk & Reservations Lifecycle Section -->
+        </div><!-- /viewRooms -->
+
+<!-- VIEW 2: FRONT DESK & RESERVATIONS -->
+    <div class="view-section" id="viewReservations">
+<!-- Front Desk & Reservations Section -->
     <section class="reservations-section" aria-label="Front Desk Reservations">
       <div class="section-heading">
         <div class="heading-text">
           <h2 class="section-title">Front Desk & Reservations</h2>
-          <p class="section-subtitle">Real-time guest lifecycle management: arrivals, check-out folios, and cancellations.</p>
+          <p class="section-subtitle">Manage guest check-ins, check-outs, room bills, and cancellations.</p>
         </div>
         <div class="reservations-filter-tabs" id="bookingFilterTabs">
           <button class="tab-btn active" data-status="">All</button>
@@ -539,13 +687,13 @@
         <table class="reservations-table" id="reservationsTable">
           <thead>
             <tr>
-              <th>Folio #</th>
+              <th>Bill #</th>
               <th>Guest Name</th>
               <th>Room</th>
               <th>Stay Period</th>
               <th>Total Bill</th>
               <th>Status</th>
-              <th>Lifecycle Actions</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody id="reservationsTableBody">
@@ -558,12 +706,16 @@
       </div>
     </section>
 
-    <!-- Module 10: Guest Directory & Loyalty CRM -->
+        </div><!-- /viewReservations -->
+
+<!-- VIEW 5: GUEST DIRECTORY -->
+    <div class="view-section" id="viewGuests">
+<!-- Module 10: Guest Directory & Loyalty Members -->
     <section class="crm-section" id="guestCrmSection">
       <div class="reservations-header">
         <div>
-          <h2 class="panel-title">Guest Directory & Loyalty CRM</h2>
-          <p class="panel-subtitle">Customer lifetime value, loyalty tiers, stay histories, and guest preferences.</p>
+          <h2 class="panel-title">Guest Directory & Loyalty Members</h2>
+          <p class="panel-subtitle">Search registered guests, view contact details, VIP level, and past stays.</p>
         </div>
         <div class="crm-controls-group">
           <div class="crm-search-wrapper">
@@ -571,7 +723,7 @@
               <circle cx="11" cy="11" r="8"></circle>
               <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
             </svg>
-            <input type="text" id="guestSearchInput" placeholder="Search by name, email, or phone..." aria-label="Search Guests">
+            <input type="text" id="guestSearchInput" placeholder="Search by guest name, email, or phone..." aria-label="Search Guests">
           </div>
           <div class="reservations-filter-tabs" id="guestTierTabs">
             <button class="tab-btn active" data-tier="">All Tiers</button>
@@ -580,7 +732,7 @@
             <button class="tab-btn" data-tier="Gold">Gold</button>
             <button class="tab-btn" data-tier="Platinum">Platinum</button>
           </div>
-          <button id="btnOpenNewGuestModal" class="btn btn-secondary btn-new-guest">+ New Guest</button>
+          <button id="btnOpenNewGuestModal" class="btn btn-secondary btn-new-guest">+ Add New Guest</button>
         </div>
       </div>
 
@@ -590,11 +742,11 @@
             <tr>
               <th>Guest</th>
               <th>Contact Details</th>
-              <th>VIP Tier</th>
-              <th>Stays (Done/All)</th>
-              <th>Lifetime Spend</th>
-              <th>Preferences / Notes</th>
-              <th>CRM Actions</th>
+              <th>VIP Level</th>
+              <th>Total Stays</th>
+              <th>Total Spent</th>
+              <th>Special Requests / Notes</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody id="guestsTableBody">
@@ -607,12 +759,16 @@
       </div>
     </section>
 
-    <!-- Module 12: Operations Audit Trail & Compliance Ledger -->
+        </div><!-- /viewGuests -->
+
+<!-- VIEW 7: ACTIVITY HISTORY -->
+    <div class="view-section" id="viewAudit">
+<!-- Module 12: Staff Activity History & Action Log -->
     <section class="audit-section" id="auditLedgerSection" aria-label="Operations Audit Trail">
       <div class="reservations-header">
         <div>
-          <h2 class="panel-title">Operations Audit Trail & Compliance Ledger</h2>
-          <p class="panel-subtitle">Immutable timeline of front desk actions, room mutations, guest updates, and system folios.</p>
+          <h2 class="panel-title">Staff Activity History & Action Log</h2>
+          <p class="panel-subtitle">Recent actions taken by hotel staff, room changes, and guest bookings.</p>
         </div>
         <div class="crm-controls-group">
           <div class="reservations-filter-tabs" id="auditEntityTabs">
@@ -637,10 +793,10 @@
           <thead>
             <tr>
               <th style="width: 140px;">Timestamp</th>
-              <th style="width: 170px;">Action Code</th>
-              <th style="width: 110px;">Target Entity</th>
-              <th style="width: 130px;">Operator</th>
-              <th>Audit Payload / Event Details</th>
+              <th style="width: 170px;">Action Taken</th>
+              <th style="width: 110px;">Item Changed</th>
+              <th style="width: 130px;">Staff Member</th>
+              <th>Details</th>
             </tr>
           </thead>
           <tbody id="auditLogsTableBody">
@@ -653,12 +809,16 @@
       </div>
     </section>
 
-    <!-- Module 13: Maintenance Work Orders & Housekeeping Dispatch -->
+        </div><!-- /viewAudit -->
+
+<!-- VIEW 4: MAINTENANCE & REPAIRS -->
+    <div class="view-section" id="viewMaintenance">
+<!-- Module 13: Maintenance Work Orders & Cleaning in Progress Status Dispatch -->
     <section class="maintenance-section" id="maintenanceSection" aria-label="Maintenance Work Orders">
       <div class="reservations-header">
         <div>
-          <h2 class="panel-title">Facilities & Maintenance Work Orders</h2>
-          <p class="panel-subtitle">Room repairs, trade dispatching, priority queues, and automatic turnover locking.</p>
+          <h2 class="panel-title">Repairs & Maintenance Requests</h2>
+          <p class="panel-subtitle">Report broken items, assign repair technicians, and track fix status.</p>
         </div>
         <div class="crm-controls-group">
           <!-- Summary chips -->
@@ -675,7 +835,7 @@
             <button class="tab-btn" data-status="In Progress">In Progress</button>
             <button class="tab-btn" data-status="Resolved">Resolved</button>
           </div>
-          <button id="btnOpenNewTicketModal" class="btn btn-primary" style="font-size: 12px; padding: 7px 14px;">+ Dispatch Work Order</button>
+          <button id="btnOpenNewTicketModal" class="btn btn-primary" style="font-size: 12px; padding: 7px 14px;">+ Request Repair</button>
         </div>
       </div>
 
@@ -683,12 +843,12 @@
         <table class="reservations-table" id="maintenanceTable">
           <thead>
             <tr>
-              <th style="width: 80px;">WO #</th>
+              <th style="width: 80px;">Ticket #</th>
               <th style="width: 120px;">Room</th>
-              <th>Issue Description</th>
-              <th style="width: 110px;">Trade</th>
+              <th>Problem Description</th>
+              <th style="width: 110px;">Specialty</th>
               <th style="width: 100px;">Priority</th>
-              <th style="width: 140px;">Assigned Tech</th>
+              <th style="width: 140px;">Technician</th>
               <th style="width: 110px;">Status</th>
               <th style="width: 150px;">Actions</th>
             </tr>
@@ -703,22 +863,26 @@
       </div>
     </section>
 
-    <!-- Module 4: Housekeeping & Room Status Management -->
-    <section class="housekeeping-section" id="housekeepingSection" aria-label="Housekeeping Turnover & Quality Audits">
+        </div><!-- /viewMaintenance -->
+
+<!-- VIEW 3: HOUSEKEEPING -->
+    <div class="view-section" id="viewCleaning in Progress Status">
+<!-- Module 4: Cleaning in Progress Status & Room Status Management -->
+    <section class="housekeeping-section" id="housekeepingSection" aria-label="Cleaning in Progress Status Turnover & Quality Audits">
       <div class="reservations-header">
         <div>
-          <h2 class="panel-title">Housekeeping & Room Turnover Operations</h2>
-          <p class="panel-subtitle">Room turnover states, attendant dispatch, inspection audits, checklist tracking, and DND controls.</p>
+          <h2 class="panel-title">Cleaning in Progress Status & Room Turnover Operations</h2>
+          <p class="panel-subtitle">Track clean and dirty rooms, assign cleaners, inspect rooms, and check Do Not Disturb (DND).</p>
         </div>
         <div class="crm-controls-group">
-          <!-- Housekeeping Summary KPI Chips -->
+          <!-- Cleaning in Progress Status Summary KPI Chips -->
           <div class="maintenance-kpis-wrapper">
-            <span class="m-kpi-chip hk-chip-inspected"><strong id="hkKpiInspected">0</strong> Inspected Ready</span>
-            <span class="m-kpi-chip hk-chip-clean"><strong id="hkKpiClean">0</strong> Clean (Pending Audit)</span>
-            <span class="m-kpi-chip hk-chip-dirty"><strong id="hkKpiDirty">0</strong> Dirty</span>
-            <span class="m-kpi-chip hk-chip-cleaning"><strong id="hkKpiCleaning">0</strong> Cleaning</span>
+            <span class="m-kpi-chip hk-chip-inspected"><strong id="hkKpiInspected">0</strong> Ready (Inspected)</span>
+            <span class="m-kpi-chip hk-chip-clean"><strong id="hkKpiClean">0</strong> Clean</span>
+            <span class="m-kpi-chip hk-chip-dirty"><strong id="hkKpiNeeds Cleaning in Progress">0</strong> Needs Cleaning in Progress</span>
+            <span class="m-kpi-chip hk-chip-cleaning"><strong id="hkKpiCleaning in Progress">0</strong> Cleaning in Progress</span>
             <span class="m-kpi-chip hk-chip-urgent"><strong id="hkKpiUrgent">0</strong> Rush / VIP</span>
-            <span class="m-kpi-chip hk-chip-dnd"><strong id="hkKpiDnd">0</strong> DND Active</span>
+            <span class="m-kpi-chip hk-chip-dnd"><strong id="hkKpiDnd">0</strong> Do Not Disturb</span>
           </div>
 
           <div class="reservations-filter-tabs" id="housekeepingStatusTabs">
@@ -728,7 +892,7 @@
             <button class="tab-btn" data-status="Cleaned">Cleaned</button>
             <button class="tab-btn" data-status="Inspected">Inspected</button>
           </div>
-          <button id="btnOpenNewHkTaskModal" class="btn btn-primary" style="font-size: 12px; padding: 7px 14px;">+ Dispatch Cleaning Task</button>
+          <button id="btnOpenNewHkTaskModal" class="btn btn-primary" style="font-size: 12px; padding: 7px 14px;">+ Dispatch Cleaning in Progress Task</button>
         </div>
       </div>
 
@@ -740,11 +904,11 @@
               <th style="width: 110px;">Room</th>
               <th style="width: 145px;">Task Type</th>
               <th style="width: 120px;">Priority</th>
-              <th style="width: 130px;">Attendant</th>
-              <th style="width: 180px;">Quality Checklist</th>
-              <th>Turnover Notes / Inspector</th>
+              <th style="width: 130px;">Assigned Cleaner</th>
+              <th style="width: 180px;">Checklist</th>
+              <th>Notes / Inspector</th>
               <th style="width: 110px;">Status</th>
-              <th style="width: 200px;">Operational Actions</th>
+              <th style="width: 200px;">Actions</th>
             </tr>
           </thead>
           <tbody id="housekeepingTableBody">
@@ -757,12 +921,16 @@
       </div>
     </section>
 
-    <!-- Module 5: Room Keycard / Access Control & Security Logging -->
+        </div><!-- /viewCleaning in Progress Status -->
+
+<!-- VIEW 6: KEY CARDS & ACCESS -->
+    <div class="view-section" id="viewKeycards">
+<!-- Module 5: Room Keycard / Access Control & Security Logging -->
     <section class="keycard-section" id="keycardSection" aria-label="Keycard Access Control and Security Audit">
       <div class="reservations-header">
         <div>
-          <h2 class="panel-title">Keycard & Access Control Security</h2>
-          <p class="panel-subtitle">RFID/NFC card encoding, staff master keys, physical door tap simulation, and electronic access audit trails.</p>
+          <h2 class="panel-title">Room Keys & Digital Card Access</h2>
+          <p class="panel-subtitle">Issue digital room keys, create master keys, and test key card entry at room doors.</p>
         </div>
         <div class="crm-controls-group">
           <!-- Security KPI Chips -->
@@ -778,8 +946,8 @@
             <button class="tab-btn active" data-view="cards">Keycard Registry</button>
             <button class="tab-btn" data-view="logs">Live Door Taps</button>
           </div>
-          <button id="btnOpenDoorTapModal" class="btn btn-secondary" style="font-size: 12px; padding: 7px 12px;">Simulate Door Tap</button>
-          <button id="btnOpenIssueCardModal" class="btn btn-primary" style="font-size: 12px; padding: 7px 14px;">+ Issue Keycard</button>
+          <button id="btnOpenDoorTapModal" class="btn btn-secondary" style="font-size: 12px; padding: 7px 12px;">Test Key Tap at Door</button>
+          <button id="btnOpenIssueCardModal" class="btn btn-primary" style="font-size: 12px; padding: 7px 14px;">+ Issue New Key Card</button>
         </div>
       </div>
 
@@ -805,13 +973,13 @@
         <table class="reservations-table" id="keycardsTable">
           <thead>
             <tr>
-              <th style="width: 150px;">Card UID</th>
+              <th style="width: 150px;">Card ID</th>
               <th>Cardholder</th>
-              <th style="width: 130px;">Tier / Category</th>
-              <th style="width: 100px;">Assigned Room</th>
-              <th style="width: 120px;">Issued At</th>
+              <th style="width: 130px;">Card Type</th>
+              <th style="width: 100px;">Room #</th>
+              <th style="width: 120px;">Issued Date</th>
               <th style="width: 110px;">Status</th>
-              <th style="width: 170px;">Security Actions</th>
+              <th style="width: 170px;">Actions</th>
             </tr>
           </thead>
           <tbody id="keycardsTableBody">
@@ -837,7 +1005,7 @@
           <thead>
             <tr>
               <th style="width: 140px;">Timestamp</th>
-              <th style="width: 150px;">Card UID</th>
+              <th style="width: 150px;">Card ID</th>
               <th style="width: 110px;">Target Room</th>
               <th style="width: 180px;">Reader Location</th>
               <th>Cardholder / Role</th>
@@ -854,7 +1022,11 @@
       </div>
     </section>
 
-  </main>
+      </div><!-- /viewKeycards -->
+</main>
+    </div><!-- /app-main-viewport -->
+  </div><!-- /app-shell -->
+
 
   <!-- Reservation Receipt Modal -->
   <div id="receiptModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
@@ -955,7 +1127,7 @@
             <input type="tel" id="newGuestPhone" required placeholder="+1-555-8921">
           </div>
           <div class="form-control">
-            <label for="newGuestTier">Initial VIP Tier</label>
+            <label for="newGuestTier">Initial VIP Level</label>
             <select id="newGuestTier" class="form-select">
               <option value="Standard">Standard</option>
               <option value="Silver">Silver</option>
@@ -997,7 +1169,7 @@
             </select>
           </div>
           <div class="form-control">
-            <label for="ticketCategorySelect">Trade Category <span class="required">*</span></label>
+            <label for="ticketCategorySelect">Specialty Category <span class="required">*</span></label>
             <select id="ticketCategorySelect" class="form-select" required>
               <option value="Plumbing">Plumbing</option>
               <option value="Electrical">Electrical</option>
@@ -1028,12 +1200,12 @@
 
         <div class="form-row">
           <div class="form-control">
-            <label for="ticketAssignedStaff">Assigned Technician</label>
+            <label for="ticketAssignedStaff">Techniciannician</label>
             <input type="text" id="ticketAssignedStaff" placeholder="Facilities Team" value="Facilities Team">
           </div>
           <div class="form-control">
             <label for="ticketReportedBy">Reported By</label>
-            <input type="text" id="ticketReportedBy" placeholder="Housekeeping" value="Housekeeping">
+            <input type="text" id="ticketReportedBy" placeholder="Cleaning in Progress Status" value="Cleaning in Progress Status">
           </div>
         </div>
 
@@ -1079,7 +1251,7 @@
         <div class="form-control filter-field-checkbox" style="margin-top: 6px;">
           <label for="resolveAutoRelease" class="checkbox-label">
             <input type="checkbox" id="resolveAutoRelease" checked>
-            <span>Auto-transition room to "Cleaning" for housekeeping sanitization</span>
+            <span>Auto-transition room to "Cleaning in Progress" for housekeeping sanitization</span>
           </label>
         </div>
         <div class="modal-footer" style="padding: 12px 0 0; border-top: none;">
@@ -1231,7 +1403,7 @@
     </div>
   </div>
 
-  <!-- Dispatch Housekeeping Task Modal (Module 4) -->
+  <!-- Dispatch Cleaning in Progress Status Task Modal (Module 4) -->
   <div id="dispatchHkTaskModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
     <div class="modal-card">
       <div class="modal-header">
@@ -1241,7 +1413,7 @@
             <polyline points="9 22 9 12 15 12 15 22"></polyline>
           </svg>
         </div>
-        <h3 class="modal-title">Dispatch Housekeeping Assignment</h3>
+        <h3 class="modal-title">Dispatch Cleaning in Progress Status Assignment</h3>
         <p class="modal-subtitle">Assign room attendant and turnover workflow standards</p>
       </div>
 
@@ -1278,9 +1450,9 @@
           </div>
 
           <div class="form-control">
-            <label for="hkModalAttendant">Assigned Room Attendant</label>
-            <select id="hkModalAttendant">
-              <option value="Maria Santos">Maria Santos (Lead Attendant)</option>
+            <label for="hkModalAssigned Cleaner">Room # Assigned Cleaner</label>
+            <select id="hkModalAssigned Cleaner">
+              <option value="Maria Santos">Maria Santos (Lead Assigned Cleaner)</option>
               <option value="David Kim">David Kim (Floor Supervisor)</option>
               <option value="Elena Rostova">Elena Rostova (VIP Suites Specialist)</option>
               <option value="Carlos Gomez">Carlos Gomez (Evening Turnover)</option>
@@ -1328,13 +1500,13 @@
               <select id="kcModalType" required>
                 <option value="Guest">Guest (Single Room)</option>
                 <option value="Staff Master">Staff Master (Universal Override)</option>
-                <option value="Housekeeping">Housekeeping Attendant</option>
+                <option value="Cleaning in Progress Status">Cleaning in Progress Status Assigned Cleaner</option>
                 <option value="Maintenance">Maintenance Technician</option>
                 <option value="Emergency Override">Emergency Override</option>
               </select>
             </div>
             <div class="form-control">
-              <label for="kcModalRoom">Assigned Room</label>
+              <label for="kcModalRoom">Room #</label>
               <select id="kcModalRoom">
                 <option value="">Select Room (Optional for Master)...</option>
               </select>
@@ -1360,7 +1532,7 @@
     </div>
   </div>
 
-  <!-- Simulate Door Tap Modal -->
+  <!-- Test Key Tap at Door Modal -->
   <div id="doorTapModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
     <div class="modal-card">
       <div class="modal-header">
@@ -1622,7 +1794,7 @@
             <div id="opsKpiOcc" class="room-ops-kpi-val" style="color: #93c5fd;">—</div>
           </div>
           <div class="room-ops-kpi-item">
-            <div class="room-ops-kpi-label" style="color: #fde047;">Cleaning</div>
+            <div class="room-ops-kpi-label" style="color: #fde047;">Cleaning in Progress</div>
             <div id="opsKpiClean" class="room-ops-kpi-val" style="color: #fde047;">—</div>
           </div>
           <div class="room-ops-kpi-item">
@@ -1651,7 +1823,7 @@
                 <th>Room</th>
                 <th>Type</th>
                 <th>Reason / Defect</th>
-                <th>Assigned Trade</th>
+                <th>Assigned Specialty</th>
                 <th>Expected Back</th>
                 <th>Authorized By</th>
                 <th>Action</th>
@@ -1725,8 +1897,8 @@
               </select>
             </div>
             <div class="form-control">
-              <label for="lockoutTrade">Assigned Trade</label>
-              <select id="lockoutTrade" required>
+              <label for="lockoutSpecialty">Assigned Specialty</label>
+              <select id="lockoutSpecialty" required>
                 <option value="General Maintenance">General Maintenance</option>
                 <option value="HVAC Mechanicals">HVAC Mechanicals</option>
                 <option value="Plumbing Specialists">Plumbing Specialists</option>
@@ -1797,7 +1969,7 @@
               <label for="releaseCleanliness">Turnover Cleanliness</label>
               <select id="releaseCleanliness" required>
                 <option value="Touch-up Required">Touch-up Required</option>
-                <option value="Dirty">Dirty (Full Turnover Clean)</option>
+                <option value="Needs Cleaning in Progress">Needs Cleaning in Progress (Full Turnover Clean)</option>
                 <option value="Clean">Clean (Ready for Inspection)</option>
               </select>
             </div>

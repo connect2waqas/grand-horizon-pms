@@ -3996,7 +3996,7 @@ async function handleRoomLockoutSubmit(e) {
   const payload = {
     lockout_type: (document.getElementById("lockoutType") || {}).value || "Out_of_Order",
     reason: ((document.getElementById("lockoutReason") || {}).value || "").trim(),
-    assigned_trade: (document.getElementById("lockoutTrade") || {}).value || "General Maintenance",
+    assigned_trade: (document.getElementById("lockoutSpecialty") || document.getElementById("lockoutTrade") || {}).value || "General Maintenance",
     authorized_by: ((document.getElementById("lockoutAuthorizedBy") || {}).value || "Duty Manager").trim(),
     expected_completion: (document.getElementById("lockoutExpectedCompletion") || {}).value || null,
     notes: ((document.getElementById("lockoutNotes") || {}).value || "").trim(),
@@ -4511,6 +4511,7 @@ function initNavigationViews() {
     }
     if (sidebar) sidebar.classList.remove("open");
     if (backdrop) backdrop.classList.remove("active");
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   navItems.forEach((item) => {
@@ -4555,6 +4556,14 @@ function initNavigationViews() {
     });
   }
 
+  const btnCloseSidebar = document.getElementById("btnSidebarClose");
+  if (btnCloseSidebar && sidebar && backdrop) {
+    btnCloseSidebar.addEventListener("click", () => {
+      sidebar.classList.remove("open");
+      backdrop.classList.remove("active");
+    });
+  }
+
   if (toggleBtn && sidebar && backdrop) {
     toggleBtn.addEventListener("click", () => {
       sidebar.classList.toggle("open");
@@ -4565,6 +4574,22 @@ function initNavigationViews() {
       backdrop.classList.remove("active");
     });
   }
+
+  // Global Keyboard Navigation: Escape dismisses drawers and modals
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      if (sidebar && sidebar.classList.contains("open")) {
+        sidebar.classList.remove("open");
+        if (backdrop) backdrop.classList.remove("active");
+      }
+      document.querySelectorAll(".modal-backdrop:not(.hidden), .modal-overlay").forEach((m) => {
+        if (m.style.display !== "none" && !m.classList.contains("hidden")) {
+          m.classList.add("hidden");
+          m.style.display = "none";
+        }
+      });
+    }
+  });
 
   const urlParams = new URLSearchParams(window.location.search);
   const tabParam = urlParams.get("tab");

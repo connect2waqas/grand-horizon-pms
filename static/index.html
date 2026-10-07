@@ -63,6 +63,7 @@
             </div>
             <span class="brand-subtitle" style="font-size: 11px;">Hotel Management System</span>
           </div>
+          <button id="btnSidebarClose" class="btn-sidebar-close" aria-label="Close navigation menu" title="Close menu">&times;</button>
         </div>
 
         <!-- Staff Profile Card -->
@@ -897,8 +898,8 @@
           <div class="maintenance-kpis-wrapper">
             <span class="m-kpi-chip hk-chip-inspected"><strong id="hkKpiInspected">0</strong> Ready (Inspected)</span>
             <span class="m-kpi-chip hk-chip-clean"><strong id="hkKpiClean">0</strong> Clean</span>
-            <span class="m-kpi-chip hk-chip-dirty"><strong id="hkKpiNeeds Cleaning in Progress">0</strong> Needs Cleaning in Progress</span>
-            <span class="m-kpi-chip hk-chip-cleaning"><strong id="hkKpiCleaning in Progress">0</strong> Cleaning in Progress</span>
+            <span class="m-kpi-chip hk-chip-dirty"><strong id="hkKpiDirty">0</strong> Needs Cleaning</span>
+            <span class="m-kpi-chip hk-chip-cleaning"><strong id="hkKpiCleaning">0</strong> In Progress</span>
             <span class="m-kpi-chip hk-chip-urgent"><strong id="hkKpiUrgent">0</strong> Rush / VIP</span>
             <span class="m-kpi-chip hk-chip-dnd"><strong id="hkKpiDnd">0</strong> Do Not Disturb</span>
           </div>
@@ -910,7 +911,7 @@
             <button class="tab-btn" data-status="Cleaned">Cleaned</button>
             <button class="tab-btn" data-status="Inspected">Inspected</button>
           </div>
-          <button id="btnOpenNewHkTaskModal" class="btn btn-primary" style="font-size: 12px; padding: 7px 14px;">+ Dispatch Cleaning in Progress Task</button>
+          <button id="btnOpenNewHkTaskModal" class="btn btn-primary" style="font-size: 12px; padding: 7px 14px;">+ Dispatch Cleaning Task</button>
         </div>
       </div>
 
@@ -1468,8 +1469,8 @@
           </div>
 
           <div class="form-control">
-            <label for="hkModalAssigned Cleaner">Room # Assigned Cleaner</label>
-            <select id="hkModalAssigned Cleaner">
+            <label for="hkModalAttendant">Room Attendant / Cleaner</label>
+            <select id="hkModalAttendant">
               <option value="Maria Santos">Maria Santos (Lead Assigned Cleaner)</option>
               <option value="David Kim">David Kim (Floor Supervisor)</option>
               <option value="Elena Rostova">Elena Rostova (VIP Suites Specialist)</option>

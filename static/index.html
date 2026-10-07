@@ -244,41 +244,41 @@
             Revenue Analytics
           </button>
 
-          <button id="btnOpenTechStackModal" class="btn btn-portfolio-badge" style="font-size: 11.5px; padding: 5px 12px;" title="View Full-Stack System Architecture, Tech Stack & Engineering Highlights">
+          <button id="btnOpenTechStackModal" class="btn btn-portfolio-badge" title="View Full-Stack System Architecture, Tech Stack & Engineering Highlights">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
               <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
               <polyline points="2 17 12 22 22 17"></polyline>
               <polyline points="2 12 12 17 22 12"></polyline>
             </svg>
-            <span>Tech Stack & Architecture</span>
+            <span>Tech Stack</span>
           </button>
 
-          <button id="btnQuickNewBooking" class="btn btn-primary" style="font-size: 11.5px; padding: 5px 12px; gap: 5px;" title="Book a new room">
+          <button id="btnQuickNewBooking" class="btn btn-primary" title="Book a new room">
             <span>+ Book Room</span>
           </button>
 
-          <button id="btnInstallPWA" class="btn btn-pwa-install" style="font-size: 11.5px; padding: 5px 12px; display: inline-flex; align-items: center; gap: 6px;" title="Install Grand Horizon PMS as a Desktop or Mobile App">
+          <button id="btnInstallPWA" class="btn btn-pwa-install" title="Install Grand Horizon PMS as a Desktop or Mobile App">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
               <polyline points="7 10 12 15 17 10"></polyline>
               <line x1="12" y1="15" x2="12" y2="3"></line>
             </svg>
-            <span id="pwaInstallLabel">Install App</span>
+            <span id="pwaInstallLabel">Install</span>
           </button>
 
-          <span class="status-badge" id="apiStatusBadge">
+          <span class="status-badge" id="apiStatusBadge" title="FastAPI Backend Online">
             <span class="status-dot"></span>
-            <span>FastAPI Connected</span>
+            <span>FastAPI</span>
           </span>
 
-          <a href="/docs" target="_blank" class="nav-link" title="Open Swagger API documentation">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <a href="/docs" target="_blank" class="nav-link topbar-docs-link" title="Open Swagger API documentation">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
               <polyline points="14 2 14 8 20 8"></polyline>
               <line x1="16" y1="13" x2="8" y2="13"></line>
               <line x1="16" y1="17" x2="8" y2="17"></line>
             </svg>
-            API Docs
+            <span>Docs</span>
           </a>
         </div>
       </header>
@@ -291,7 +291,7 @@
     
     <!-- Top-Level Executive KPI Bar -->
     <section class="kpi-grid" aria-label="Today's Overview">
-      <div class="kpi-card">
+      <div class="kpi-card kpi-card-rooms">
         <div class="kpi-header">
           <span class="kpi-title">Total Rooms</span>
           <div class="kpi-icon">
@@ -304,7 +304,7 @@
         <span class="kpi-trend" id="kpiInventorySub">Full hotel inventory</span>
       </div>
 
-      <div class="kpi-card">
+      <div class="kpi-card kpi-card-occupancy">
         <div class="kpi-header">
           <span class="kpi-title">Occupancy Rate</span>
           <div class="kpi-icon">
@@ -317,7 +317,7 @@
         <span class="kpi-trend text-emerald" id="kpiAdrRevpar">Avg Rate: — • Daily Rev/Room: —</span>
       </div>
 
-      <div class="kpi-card">
+      <div class="kpi-card kpi-card-arrivals">
         <div class="kpi-header">
           <span class="kpi-title">Today's Arrivals</span>
           <div class="kpi-icon">
@@ -333,7 +333,7 @@
         <span class="kpi-trend text-indigo" id="kpiTurnoverSub">Scheduled check-ins</span>
       </div>
 
-      <div class="kpi-card">
+      <div class="kpi-card kpi-card-revenue">
         <div class="kpi-header">
           <span class="kpi-title">Today's Revenue</span>
           <div class="kpi-icon">

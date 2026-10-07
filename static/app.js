@@ -1007,22 +1007,22 @@ function renderRooms(rooms) {
       <div class="card-quick-actions" onclick="event.stopPropagation()">
         <div class="card-quick-actions-row">
           <span class="quick-action-label">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M12 20h9"></path>
               <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
             </svg>
             Status
           </span>
           <select class="quick-action-select status-select" data-room-id="${room.id}" aria-label="Change Room Status">
-            <option value="Available" ${room.status === "Available" ? "selected" : ""}>Mark Available</option>
-            <option value="Cleaning" ${room.status === "Cleaning" ? "selected" : ""}>Mark Cleaning</option>
-            <option value="Occupied" ${room.status === "Occupied" ? "selected" : ""}>Mark Occupied</option>
-            <option value="Maintenance" ${room.status === "Maintenance" ? "selected" : ""}>Mark Maintenance</option>
+            <option value="Available" ${room.status === "Available" ? "selected" : ""}>Available</option>
+            <option value="Cleaning" ${room.status === "Cleaning" ? "selected" : ""}>Cleaning</option>
+            <option value="Occupied" ${room.status === "Occupied" ? "selected" : ""}>Occupied</option>
+            <option value="Maintenance" ${room.status === "Maintenance" ? "selected" : ""}>Maintenance</option>
           </select>
         </div>
-        <div class="card-quick-actions-row" style="margin-top: 6px;">
+        <div class="card-quick-actions-row">
           <span class="quick-action-label">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="20 6 9 17 4 12"></polyline>
             </svg>
             Clean

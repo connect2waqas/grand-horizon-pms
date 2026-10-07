@@ -249,35 +249,52 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--status-available-text);
-  background-color: var(--status-available-bg);
-  border: 1px solid var(--status-available-border);
-  padding: 4px 10px;
-  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #34d399;
+  background-color: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  padding: 0 10px;
+  height: 32px;
+  border-radius: 6px;
+  white-space: nowrap;
 }
 
 .status-dot {
   width: 6px;
   height: 6px;
-  background-color: var(--status-available-text);
+  background-color: #34d399;
   border-radius: 50%;
+  box-shadow: 0 0 8px #34d399;
+  animation: statusPulse 2s infinite ease-in-out;
+}
+
+@keyframes statusPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.85); }
 }
 
 .nav-link {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-muted);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #94a3b8;
   text-decoration: none;
-  padding: 6px 12px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  background-color: var(--canvas-bg);
+  padding: 0 10px;
+  height: 32px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  background-color: rgba(255, 255, 255, 0.03);
   transition: var(--transition-standard);
+  white-space: nowrap;
+}
+
+.nav-link:hover {
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.25);
+  background-color: rgba(255, 255, 255, 0.07);
 }
 
 .nav-link:hover {
@@ -335,13 +352,60 @@ body {
   right: 0;
   height: 2px;
   background: linear-gradient(90deg, #6366f1, #a855f7, transparent);
-  opacity: 0.7;
+  opacity: 0.85;
 }
 
 .kpi-card:hover {
-  border-color: rgba(99, 102, 241, 0.5);
-  transform: translateY(-2px);
-  box-shadow: 0 8px 28px -4px rgba(99, 102, 241, 0.2);
+  transform: translateY(-3px);
+  box-shadow: 0 12px 30px -4px rgba(0, 0, 0, 0.5);
+}
+
+.kpi-card-rooms::before {
+  background: linear-gradient(90deg, #0ea5e9, #38bdf8, transparent);
+}
+.kpi-card-rooms .kpi-icon {
+  background: rgba(14, 165, 233, 0.15);
+  color: #38bdf8;
+  box-shadow: 0 0 10px rgba(14, 165, 233, 0.25);
+}
+.kpi-card-rooms:hover {
+  border-color: rgba(56, 189, 248, 0.45);
+}
+
+.kpi-card-occupancy::before {
+  background: linear-gradient(90deg, #6366f1, #a855f7, transparent);
+}
+.kpi-card-occupancy .kpi-icon {
+  background: rgba(99, 102, 241, 0.15);
+  color: #a5b4fc;
+  box-shadow: 0 0 10px rgba(99, 102, 241, 0.25);
+}
+.kpi-card-occupancy:hover {
+  border-color: rgba(129, 140, 248, 0.45);
+}
+
+.kpi-card-arrivals::before {
+  background: linear-gradient(90deg, #10b981, #34d399, transparent);
+}
+.kpi-card-arrivals .kpi-icon {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.25);
+}
+.kpi-card-arrivals:hover {
+  border-color: rgba(52, 211, 153, 0.45);
+}
+
+.kpi-card-revenue::before {
+  background: linear-gradient(90deg, #f59e0b, #fbbf24, transparent);
+}
+.kpi-card-revenue .kpi-icon {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.25);
+}
+.kpi-card-revenue:hover {
+  border-color: rgba(251, 191, 36, 0.45);
 }
 
 .kpi-header {
@@ -368,6 +432,7 @@ body {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  transition: var(--transition-standard);
 }
 
 .kpi-value {
@@ -377,10 +442,11 @@ body {
   letter-spacing: -0.02em;
   line-height: 1.2;
   font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 24px rgba(255, 255, 255, 0.06);
 }
 
 .kpi-trend {
-  font-size: 12px;
+  font-size: 11.5px;
   color: #94a3b8;
   display: flex;
   align-items: center;
@@ -388,7 +454,7 @@ body {
 }
 
 .text-emerald {
-  color: var(--status-available-text);
+  color: #34d399;
 }
 
 .text-indigo {
@@ -446,8 +512,8 @@ body {
    ========================================================================== */
 
 .filter-toolbar {
-  background-color: var(--surface-bg);
-  border: 1px solid var(--border-subtle);
+  background: linear-gradient(180deg, rgba(22, 32, 50, 0.8) 0%, rgba(15, 23, 42, 0.95) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: var(--radius-lg);
   padding: 16px 20px;
   margin-bottom: 24px;
@@ -455,7 +521,8 @@ body {
   flex-wrap: wrap;
   gap: 16px;
   align-items: flex-end;
-  box-shadow: var(--shadow-card);
+  box-shadow: 0 10px 30px -4px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(12px);
 }
 
 .filter-field {
@@ -470,7 +537,22 @@ body {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--text-muted);
+  color: #94a3b8;
+}
+
+.filter-field input,
+.filter-field select {
+  min-height: 40px !important;
+  border-radius: 8px !important;
+  font-size: 12.5px !important;
+  background-color: #0f172a !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+}
+
+.filter-field input:focus,
+.filter-field select:focus {
+  border-color: #6366f1 !important;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25) !important;
 }
 
 .filter-field-checkbox {
@@ -484,7 +566,7 @@ body {
   align-items: center;
   gap: 7px;
   font-size: 12px;
-  color: var(--text-muted);
+  color: #94a3b8;
   cursor: pointer;
   user-select: none;
   text-transform: none !important;
@@ -502,6 +584,46 @@ body {
 .filter-cta-group {
   display: flex;
   gap: 8px;
+  align-items: center;
+}
+
+#applyFilterBtn {
+  min-height: 40px;
+  padding: 0 16px;
+  font-size: 12.5px;
+  font-weight: 600;
+  background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%);
+  color: #ffffff;
+  border: 1px solid #818cf8;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(79, 70, 229, 0.35);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+#applyFilterBtn:hover {
+  background: linear-gradient(135deg, #4338ca 0%, #4f46e5 100%);
+  box-shadow: 0 4px 16px rgba(79, 70, 229, 0.5);
+  transform: translateY(-1px);
+}
+
+#resetFilterBtn {
+  min-height: 40px;
+  padding: 0 14px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #94a3b8;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+#resetFilterBtn:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
 /* ==========================================================================
@@ -849,52 +971,77 @@ input::-webkit-calendar-picker-indicator {
 
 /* Quick Actions Control inside Card */
 .card-quick-actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 8px;
-  padding-top: 10px;
-  border-top: 1px solid var(--border-subtle);
-  margin-top: 10px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  margin-top: 12px;
+}
+
+.card-quick-actions-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
 }
 
 .quick-action-label {
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 600;
+  color: #94a3b8;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
   display: flex;
   align-items: center;
   gap: 4px;
 }
 
 .quick-action-select {
-  background-color: var(--surface-input);
-  color: var(--text-high-contrast);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
+  background-color: #0f172a !important;
+  color: #f1f5f9 !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-radius: 6px !important;
   padding: 4px 8px;
-  min-height: 32px;
+  min-height: 30px;
+  height: 30px;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
   outline: none;
-  width: auto;
-  flex: 1;
+  width: 100%;
+  box-sizing: border-box;
+  transition: all 0.15s ease;
   min-width: 0;
-  transition: var(--transition-standard);
-  -webkit-tap-highlight-color: transparent;
 }
 
 .quick-action-select:hover {
-  border-color: var(--border-hover);
-  background-color: var(--surface-input);
+  border-color: rgba(99, 102, 241, 0.5) !important;
+  background-color: #1e293b !important;
 }
 
 .quick-action-select:focus {
-  border-color: var(--brand-primary);
-  box-shadow: 0 0 0 3px var(--brand-ring);
+  border-color: #6366f1 !important;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25) !important;
+}
+
+.card-quick-actions .btn-lockout-room,
+.card-quick-actions .btn-release-room {
+  grid-column: 1 / -1;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.card-quick-actions .btn-lockout-room:hover,
+.card-quick-actions .btn-release-room:hover {
+  background: rgba(239, 68, 68, 0.22);
+  border-color: #f87171;
+  color: #ffffff;
 }
 
 /* Room Price Fluid Typography */
@@ -902,19 +1049,20 @@ input::-webkit-calendar-picker-indicator {
   display: flex;
   align-items: baseline;
   gap: 4px;
-  padding: 4px 0;
+  padding: 6px 0 2px;
 }
 
 .room-price-val {
-  font-size: clamp(1.25rem, 1.8vw + 0.5rem, 1.5rem);
+  font-size: clamp(1.25rem, 1.8vw + 0.5rem, 1.55rem);
   font-weight: 700;
-  color: var(--text-high-contrast);
+  color: #ffffff;
   letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
 }
 
 .room-price-period {
-  font-size: 13px;
-  color: var(--text-muted);
+  font-size: 12.5px;
+  color: #94a3b8;
   font-weight: 400;
 }
 
@@ -925,22 +1073,41 @@ input::-webkit-calendar-picker-indicator {
 
 .btn-select-room {
   width: 100%;
-  font-size: 12px;
-  padding: 8px 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 8px 14px;
+  min-height: 38px;
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.95) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #f8fafc;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-select-room:hover:not(:disabled) {
+  background: linear-gradient(180deg, #4f46e5 0%, #4338ca 100%);
+  border-color: #6366f1;
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(79, 70, 229, 0.4);
+  transform: translateY(-1px);
 }
 
 .room-card.selected .btn-select-room {
-  background-color: var(--brand-primary);
-  border-color: var(--brand-primary);
-  color: #ffffff;
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%) !important;
+  border-color: #818cf8 !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.45) !important;
 }
 
 /* Disabled buttons on Occupied / Cleaning rooms */
 .btn-select-room:disabled {
-  background-color: var(--canvas-bg);
-  border-color: var(--border-subtle);
-  color: var(--text-muted);
+  background: rgba(15, 23, 42, 0.6) !important;
+  border: 1px solid rgba(255, 255, 255, 0.06) !important;
+  color: #94a3b8 !important;
   opacity: 0.85;
+  cursor: not-allowed;
+  box-shadow: none !important;
 }
 
 /* ==========================================================================
@@ -1176,11 +1343,11 @@ input::-webkit-calendar-picker-indicator {
    ========================================================================== */
 
 .booking-panel {
-  background-color: var(--surface-bg);
-  border: 1px solid var(--border-subtle);
+  background: linear-gradient(180deg, #162032 0%, #0f172a 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: var(--radius-lg);
   padding: 24px;
-  box-shadow: var(--shadow-card);
+  box-shadow: 0 10px 32px -4px rgba(0, 0, 0, 0.45);
   position: sticky;
   top: 80px;
 }
@@ -2947,32 +3114,35 @@ input::-webkit-calendar-picker-indicator {
 .currency-selector-badge {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  background: rgba(30, 41, 59, 0.7);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  padding: 4px 10px;
-  color: var(--text-muted);
+  gap: 5px;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  padding: 0 8px;
+  height: 32px;
+  color: #94a3b8;
   transition: var(--transition-standard);
+  white-space: nowrap;
 }
 
 .currency-selector-badge:hover,
 .currency-selector-badge:focus-within {
-  border-color: var(--brand-indigo);
+  border-color: #6366f1;
   background: rgba(30, 41, 59, 0.95);
   color: #a5b4fc;
-  box-shadow: 0 0 10px rgba(99, 102, 241, 0.15);
+  box-shadow: 0 0 10px rgba(99, 102, 241, 0.25);
 }
 
 .currency-selector-badge select {
   background: transparent;
   border: none;
-  color: var(--text-high-contrast);
+  color: #f8fafc;
   font-family: var(--font-family);
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 600;
   cursor: pointer;
   outline: none;
+  padding: 0;
 }
 
 .currency-selector-badge select option {
@@ -3123,13 +3293,17 @@ input::-webkit-calendar-picker-indicator {
   border: 1px solid rgba(245, 158, 11, 0.45);
   color: #fef3c7;
   font-weight: 600;
-  border-radius: var(--radius-sm);
+  font-size: 11.5px;
+  padding: 0 10px;
+  height: 32px;
+  border-radius: 6px;
   cursor: pointer;
   transition: var(--transition-standard);
   display: inline-flex;
   align-items: center;
   gap: 6px;
   box-shadow: 0 0 12px rgba(245, 158, 11, 0.12);
+  white-space: nowrap;
 }
 
 .btn-pwa-install:hover {
@@ -3303,28 +3477,42 @@ input::-webkit-calendar-picker-indicator {
   border: 1px solid transparent;
   margin-bottom: 2px;
   text-decoration: none;
+  position: relative;
 }
 
 .sidebar-nav-item:hover {
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--text-high-contrast);
+  background: rgba(255, 255, 255, 0.05);
+  color: #ffffff;
 }
 
 .sidebar-nav-item.active {
-  background: rgba(99, 102, 241, 0.15);
+  background: linear-gradient(90deg, rgba(99, 102, 241, 0.18) 0%, rgba(99, 102, 241, 0.04) 100%);
   border-color: rgba(99, 102, 241, 0.35);
-  color: #818cf8;
+  color: #ffffff;
   font-weight: 600;
+}
+
+.sidebar-nav-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  border-radius: 0 4px 4px 0;
+  background: linear-gradient(180deg, #6366f1, #a855f7);
+  box-shadow: 0 0 8px rgba(99, 102, 241, 0.6);
 }
 
 .sidebar-nav-item svg {
   flex-shrink: 0;
-  opacity: 0.85;
+  opacity: 0.75;
+  transition: opacity 0.15s ease;
 }
 
 .sidebar-nav-item.active svg {
   opacity: 1;
-  stroke: #818cf8;
+  stroke: #a5b4fc;
 }
 
 .sidebar-footer {
@@ -3355,7 +3543,7 @@ input::-webkit-calendar-picker-indicator {
   position: sticky;
   top: 0;
   z-index: 40;
-  padding: 12px 24px;
+  padding: 10px 24px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -3421,6 +3609,36 @@ input::-webkit-calendar-picker-indicator {
   gap: 8px;
   flex-wrap: nowrap;
   flex-shrink: 0;
+  margin-left: auto;
+}
+
+.topbar-right > * {
+  height: 32px;
+  min-height: 32px;
+  box-sizing: border-box;
+}
+
+#btnQuickNewBooking {
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%) !important;
+  border: 1px solid #818cf8 !important;
+  color: #ffffff !important;
+  font-weight: 600 !important;
+  font-size: 11.5px !important;
+  padding: 0 12px !important;
+  border-radius: 6px !important;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  box-shadow: 0 2px 10px rgba(99, 102, 241, 0.35);
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+#btnQuickNewBooking:hover {
+  background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%) !important;
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.5) !important;
+  transform: translateY(-1px);
 }
 
 /* View Sections Switcher */
@@ -3527,13 +3745,17 @@ input::-webkit-calendar-picker-indicator {
   border: 1px solid rgba(168, 85, 247, 0.45);
   color: #e9d5ff;
   font-weight: 600;
-  border-radius: var(--radius-sm);
+  font-size: 11.5px;
+  padding: 0 10px;
+  height: 32px;
+  border-radius: 6px;
   cursor: pointer;
   transition: var(--transition-standard);
   display: inline-flex;
   align-items: center;
   gap: 6px;
   box-shadow: 0 0 12px rgba(168, 85, 247, 0.15);
+  white-space: nowrap;
 }
 
 .btn-portfolio-badge:hover {
@@ -3675,15 +3897,24 @@ input::-webkit-calendar-picker-indicator {
   }
 }
 
-@media (max-width: 1280px) {
-  #apiStatusBadge {
-    display: none;
+@media (max-width: 1200px) {
+  .topbar-docs-link {
+    display: none !important;
   }
 }
 
-@media (max-width: 1120px) {
-  .app-topbar .nav-link {
-    display: none;
+@media (max-width: 1080px) {
+  #apiStatusBadge {
+    display: none !important;
+  }
+}
+
+@media (max-width: 900px) {
+  #btnInstallPWA #pwaInstallLabel {
+    display: none !important;
+  }
+  #btnInstallPWA {
+    padding: 0 8px !important;
   }
 }
 

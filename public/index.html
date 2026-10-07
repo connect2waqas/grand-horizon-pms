@@ -97,11 +97,11 @@
             <span>Front Desk & Stays</span>
           </a>
 
-          <a class="sidebar-nav-item" data-view="viewCleaning in Progress Status" id="navCleaning in Progress Status">
+          <a class="sidebar-nav-item" data-view="viewHousekeeping" id="navHousekeeping">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"></path>
             </svg>
-            <span>Cleaning in Progress Status & Cleaning in Progress</span>
+            <span>Housekeeping & Cleaning in Progress</span>
           </a>
 
           <a class="sidebar-nav-item" data-view="viewMaintenance" id="navMaintenance">
@@ -380,7 +380,7 @@
             </select>
           </div>
           <div class="filter-field">
-            <label for="filterCleanliness">Cleaning in Progress Status</label>
+            <label for="filterCleanliness">Housekeeping</label>
             <select id="filterCleanliness" name="filterCleanliness">
               <option value="">All States</option>
               <option value="Inspected">Inspected (Ready)</option>
@@ -813,7 +813,7 @@
 
 <!-- VIEW 4: MAINTENANCE & REPAIRS -->
     <div class="view-section" id="viewMaintenance">
-<!-- Module 13: Maintenance Work Orders & Cleaning in Progress Status Dispatch -->
+<!-- Module 13: Maintenance Work Orders & Housekeeping Dispatch -->
     <section class="maintenance-section" id="maintenanceSection" aria-label="Maintenance Work Orders">
       <div class="reservations-header">
         <div>
@@ -866,16 +866,16 @@
         </div><!-- /viewMaintenance -->
 
 <!-- VIEW 3: HOUSEKEEPING -->
-    <div class="view-section" id="viewCleaning in Progress Status">
-<!-- Module 4: Cleaning in Progress Status & Room Status Management -->
-    <section class="housekeeping-section" id="housekeepingSection" aria-label="Cleaning in Progress Status Turnover & Quality Audits">
+    <div class="view-section" id="viewHousekeeping">
+<!-- Module 4: Housekeeping & Room Status Management -->
+    <section class="housekeeping-section" id="housekeepingSection" aria-label="Housekeeping Turnover & Quality Audits">
       <div class="reservations-header">
         <div>
-          <h2 class="panel-title">Cleaning in Progress Status & Room Turnover Operations</h2>
+          <h2 class="panel-title">Housekeeping & Room Turnover Operations</h2>
           <p class="panel-subtitle">Track clean and dirty rooms, assign cleaners, inspect rooms, and check Do Not Disturb (DND).</p>
         </div>
         <div class="crm-controls-group">
-          <!-- Cleaning in Progress Status Summary KPI Chips -->
+          <!-- Housekeeping Summary KPI Chips -->
           <div class="maintenance-kpis-wrapper">
             <span class="m-kpi-chip hk-chip-inspected"><strong id="hkKpiInspected">0</strong> Ready (Inspected)</span>
             <span class="m-kpi-chip hk-chip-clean"><strong id="hkKpiClean">0</strong> Clean</span>
@@ -921,7 +921,7 @@
       </div>
     </section>
 
-        </div><!-- /viewCleaning in Progress Status -->
+        </div><!-- /viewHousekeeping -->
 
 <!-- VIEW 6: KEY CARDS & ACCESS -->
     <div class="view-section" id="viewKeycards">
@@ -1205,7 +1205,7 @@
           </div>
           <div class="form-control">
             <label for="ticketReportedBy">Reported By</label>
-            <input type="text" id="ticketReportedBy" placeholder="Cleaning in Progress Status" value="Cleaning in Progress Status">
+            <input type="text" id="ticketReportedBy" placeholder="Housekeeping" value="Housekeeping">
           </div>
         </div>
 
@@ -1403,7 +1403,7 @@
     </div>
   </div>
 
-  <!-- Dispatch Cleaning in Progress Status Task Modal (Module 4) -->
+  <!-- Dispatch Housekeeping Task Modal (Module 4) -->
   <div id="dispatchHkTaskModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
     <div class="modal-card">
       <div class="modal-header">
@@ -1413,7 +1413,7 @@
             <polyline points="9 22 9 12 15 12 15 22"></polyline>
           </svg>
         </div>
-        <h3 class="modal-title">Dispatch Cleaning in Progress Status Assignment</h3>
+        <h3 class="modal-title">Dispatch Housekeeping Assignment</h3>
         <p class="modal-subtitle">Assign room attendant and turnover workflow standards</p>
       </div>
 
@@ -1500,7 +1500,7 @@
               <select id="kcModalType" required>
                 <option value="Guest">Guest (Single Room)</option>
                 <option value="Staff Master">Staff Master (Universal Override)</option>
-                <option value="Cleaning in Progress Status">Cleaning in Progress Status Assigned Cleaner</option>
+                <option value="Housekeeping">Housekeeping Assigned Cleaner</option>
                 <option value="Maintenance">Maintenance Technician</option>
                 <option value="Emergency Override">Emergency Override</option>
               </select>

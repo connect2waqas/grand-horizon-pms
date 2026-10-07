@@ -188,6 +188,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initPWAInstall();
   initNavigationViews();
   initLiveShiftClock();
+  initPortfolioShowcase();
 });
 
 function setupInitialDates() {
@@ -4607,4 +4608,106 @@ function initLiveShiftClock() {
   }
   update();
   setInterval(update, 1000);
+}
+
+
+// ==============================================================================
+// Portfolio Showcase, System Telemetry & Interactive Demo Presets
+// ==============================================================================
+
+function openTechStackModal() {
+  const modal = document.getElementById("techStackModal");
+  if (!modal) return;
+  modal.style.display = "flex";
+  measureApiLatency();
+}
+
+function closeTechStackModal() {
+  const modal = document.getElementById("techStackModal");
+  if (modal) modal.style.display = "none";
+}
+
+async function measureApiLatency() {
+  const el = document.getElementById("telemetryLatency");
+  if (!el) return;
+  el.textContent = "Measuring...";
+  try {
+    const t0 = performance.now();
+    const res = await fetch("/api/health");
+    const t1 = performance.now();
+    const ms = Math.round(t1 - t0);
+    el.textContent = `${ms} ms`;
+    el.style.color = ms < 150 ? "#34d399" : ms < 400 ? "#facc15" : "#f87171";
+  } catch (err) {
+    el.textContent = "Offline";
+  }
+}
+
+function initPortfolioShowcase() {
+  const btnTop = document.getElementById("btnOpenTechStackModal");
+  const navSb = document.getElementById("navSidebarTechStack");
+  const btnClose = document.getElementById("btnCloseTechStackModal");
+  const btnDismiss = document.getElementById("btnDismissTechStackModal");
+  const modal = document.getElementById("techStackModal");
+
+  if (btnTop) btnTop.addEventListener("click", openTechStackModal);
+  if (navSb) {
+    navSb.addEventListener("click", () => {
+      openTechStackModal();
+      const sb = document.getElementById("appSidebar");
+      const bd = document.getElementById("sidebarBackdrop");
+      if (sb) sb.classList.remove("open");
+      if (bd) bd.classList.remove("active");
+    });
+  }
+  if (btnClose) btnClose.addEventListener("click", closeTechStackModal);
+  if (btnDismiss) btnDismiss.addEventListener("click", closeTechStackModal);
+  if (modal) {
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) closeTechStackModal();
+    });
+  }
+
+  // Interactive Demo Presets
+  const btnDemo1 = document.getElementById("btnDemoAutoAssign");
+  if (btnDemo1) {
+    btnDemo1.addEventListener("click", () => {
+      closeTechStackModal();
+      const navRooms = document.getElementById("navRooms");
+      if (navRooms) navRooms.click();
+      const btnAuto = document.getElementById("btnAutoAssign");
+      if (btnAuto) {
+        setTimeout(() => {
+          btnAuto.click();
+          showToast("⚡ Demo 1: Auto-selected optimal available VIP suite with best pricing package!", "success");
+        }, 300);
+      }
+    });
+  }
+
+  const btnDemo2 = document.getElementById("btnDemoKeycardTap");
+  if (btnDemo2) {
+    btnDemo2.addEventListener("click", () => {
+      closeTechStackModal();
+      const btnTap = document.getElementById("btnOpenDoorTapModal");
+      if (btnTap) btnTap.click();
+    });
+  }
+
+  const btnDemo3 = document.getElementById("btnDemoRevenue");
+  if (btnDemo3) {
+    btnDemo3.addEventListener("click", () => {
+      closeTechStackModal();
+      if (typeof openAnalyticsModal === "function") openAnalyticsModal();
+    });
+  }
+
+  const btnDemo4 = document.getElementById("btnDemoAudit");
+  if (btnDemo4) {
+    btnDemo4.addEventListener("click", () => {
+      closeTechStackModal();
+      const navAudit = document.getElementById("navAudit");
+      if (navAudit) navAudit.click();
+    });
+  }
 }

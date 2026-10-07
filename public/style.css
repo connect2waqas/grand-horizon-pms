@@ -3095,9 +3095,66 @@ input::-webkit-calendar-picker-indicator {
   color: var(--text-muted);
 }
 
+/* ==============================================================================
+   PWA Installation & Mobile Web App Styles
+   ============================================================================== */
+.btn-pwa-install {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.16) 0%, rgba(99, 102, 241, 0.22) 100%);
+  border: 1px solid rgba(245, 158, 11, 0.45);
+  color: #fef3c7;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: var(--transition-standard);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.12);
+}
 
+.btn-pwa-install:hover {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.26) 0%, rgba(99, 102, 241, 0.32) 100%);
+  border-color: #f59e0b;
+  box-shadow: 0 0 16px rgba(245, 158, 11, 0.25);
+  transform: translateY(-1px);
+}
 
+.btn-pwa-install.installed {
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.3);
+  color: #34d399;
+  cursor: default;
+  pointer-events: none;
+  box-shadow: none;
+}
 
+.ios-install-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 16px 0;
+}
 
+.ios-step-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+}
 
-
+.ios-step-num {
+  background: var(--brand-primary);
+  color: #fff;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+}

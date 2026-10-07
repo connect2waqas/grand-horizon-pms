@@ -28,7 +28,7 @@ import sqlite3
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, status
 from fastapi.exceptions import ResponseValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -267,8 +267,8 @@ class LegacyPathRewriterMiddleware:
                 path = matched_path
                 scope["path"] = path
 
-            is_static_asset = any(path.endswith(ext) for ext in (".js", ".css", ".html", ".ico", ".png", ".jpg", ".svg", ".woff", ".woff2")) or path.startswith("/static")
-            if not path.startswith("/api") and path not in ("/docs", "/openapi.json", "/redoc", "/", "/health") and not is_static_asset:
+            is_static_asset = any(path.endswith(ext) for ext in (".js", ".css", ".html", ".ico", ".png", ".jpg", ".svg", ".woff", ".woff2", ".json", ".webmanifest")) or path.startswith("/static")
+            if not path.startswith("/api") and path not in ("/docs", "/openapi.json", "/redoc", "/", "/health", "/manifest.json", "/sw.js") and not is_static_asset:
                 scope["path"] = f"/api{path}"
         await self.app(scope, receive, send)
 
@@ -6581,6 +6581,31 @@ def get_room_operations_dashboard(conn: sqlite3.Connection = Depends(get_db)):
         recent_room_moves=recent_moves,
     )
 
+
+# PWA Root Handlers (Manifest, Service Worker, and App Icons)
+@app.get("/manifest.json", tags=["PWA"])
+@app.get("/api/manifest.json", include_in_schema=False)
+def get_manifest():
+    manifest_path = STATIC_DIR / "manifest.json"
+    if manifest_path.exists():
+        return FileResponse(manifest_path, media_type="application/manifest+json")
+    raise HTTPException(status_code=404, detail="manifest.json not found")
+
+@app.get("/sw.js", tags=["PWA"])
+@app.get("/api/sw.js", include_in_schema=False)
+def get_service_worker():
+    sw_path = STATIC_DIR / "sw.js"
+    if sw_path.exists():
+        return FileResponse(sw_path, media_type="application/javascript", headers={"Service-Worker-Allowed": "/"})
+    raise HTTPException(status_code=404, detail="sw.js not found")
+
+@app.get("/{filename}.png", tags=["PWA"])
+@app.get("/api/{filename}.png", include_in_schema=False)
+def get_root_png_icon(filename: str):
+    icon_path = STATIC_DIR / f"{filename}.png"
+    if icon_path.exists():
+        return FileResponse(icon_path, media_type="image/png")
+    raise HTTPException(status_code=404, detail="Icon not found")
 
 # Mount static files if directory exists (local development fallback)
 # On Vercel, static assets are served directly from /public via edge CDN

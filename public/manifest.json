@@ -1,0 +1,76 @@
+{
+  "id": "/",
+  "name": "Grand Horizon Hotel PMS",
+  "short_name": "Grand Horizon",
+  "description": "Luxury Hospitality Property Management & Operations System",
+  "start_url": "/?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
+  "background_color": "#0B1120",
+  "theme_color": "#6366F1",
+  "orientation": "any",
+  "categories": ["business", "finance", "travel", "productivity"],
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "New Reservation",
+      "short_name": "Book",
+      "description": "Create a new guest reservation",
+      "url": "/?action=new_booking",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Room Inventory",
+      "short_name": "Rooms",
+      "description": "View live room status and occupancy",
+      "url": "/?tab=rooms",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Room Operations",
+      "short_name": "Operations",
+      "description": "Manage lockouts, room moves, and OOO status",
+      "url": "/?tab=operations",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Executive Analytics",
+      "short_name": "Analytics",
+      "description": "View pacing forecasts and RevPAR yield metrics",
+      "url": "/?tab=analytics",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

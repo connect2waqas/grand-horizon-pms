@@ -185,6 +185,7 @@ document.addEventListener("DOMContentLoaded", () => {
   fetchExchangeRates();
   fetchTaxRules();
   setupEventListeners();
+  initPWAInstall();
 });
 
 function setupInitialDates() {
@@ -4351,5 +4352,122 @@ async function fetchStayMetrics() {
     if (repCountEl) repCountEl.textContent = `${data.repeat_guest_count} repeat guests`;
   } catch (err) {
     console.error("Stay metrics error:", err);
+  }
+}
+
+
+// ==============================================================================
+// Progressive Web App (PWA) Lifecycle, Offline Sync & Installation Engine
+// ==============================================================================
+
+let deferredInstallPrompt = null;
+
+// Capture the native beforeinstallprompt event (Chromium / Edge / Android)
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  console.log("[PWA] beforeinstallprompt event captured and ready for trigger.");
+  const btn = document.getElementById("btnInstallPWA");
+  if (btn) {
+    btn.style.display = "inline-flex";
+  }
+});
+
+// Detect when PWA installation completes
+window.addEventListener("appinstalled", () => {
+  console.log("[PWA] Grand Horizon PMS installed into operating system!");
+  deferredInstallPrompt = null;
+  const btn = document.getElementById("btnInstallPWA");
+  const label = document.getElementById("pwaInstallLabel");
+  if (btn) {
+    btn.classList.add("installed");
+    if (label) label.textContent = "Installed";
+  }
+  showToast("🎉 Grand Horizon PMS installed! You can now launch it directly as a desktop or mobile application.", "success");
+});
+
+function initPWAInstall() {
+  // 1. Register Service Worker for offline asset caching
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker
+        .register("/sw.js")
+        .then((reg) => {
+          console.log("[PWA] Service Worker active with scope:", reg.scope);
+        })
+        .catch((err) => {
+          console.warn("[PWA] Service Worker registration failed:", err);
+        });
+    });
+  }
+
+  // 2. Check if already running in standalone PWA window mode
+  const isStandalone =
+    window.matchMedia("(display-mode: standalone)").matches ||
+    window.navigator.standalone === true;
+
+  const btnInstall = document.getElementById("btnInstallPWA");
+  const label = document.getElementById("pwaInstallLabel");
+
+  if (isStandalone && btnInstall) {
+    btnInstall.classList.add("installed");
+    if (label) label.textContent = "Installed";
+    btnInstall.title = "Grand Horizon PMS is running in standalone desktop app mode.";
+  }
+
+  // 3. Attach click handler to header Install button
+  if (btnInstall) {
+    btnInstall.addEventListener("click", async () => {
+      if (isStandalone) {
+        showToast("Grand Horizon PMS is already active in standalone application mode.", "info");
+        return;
+      }
+
+      // If Chromium beforeinstallprompt is ready
+      if (deferredInstallPrompt) {
+        deferredInstallPrompt.prompt();
+        const choice = await deferredInstallPrompt.userChoice;
+        console.log("[PWA] User choice outcome:", choice.outcome);
+        if (choice.outcome === "accepted") {
+          showToast("Installing Grand Horizon PMS to your device...", "info");
+        }
+        deferredInstallPrompt = null;
+        return;
+      }
+
+      // If iOS Safari, show the step-by-step visual instruction modal
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+      if (isIOS) {
+        const iosModal = document.getElementById("iosInstallModal");
+        if (iosModal) iosModal.style.display = "flex";
+        return;
+      }
+
+      // If browser already supports install (Chrome/Edge desktop toolbar icon)
+      showToast("To install Grand Horizon, click the install icon in your browser address bar or select Menu > 'Install Grand Horizon'.", "info");
+    });
+  }
+
+  // 4. iOS Modal Close Handlers
+  const btnCloseIos = document.getElementById("btnCloseIosInstallModal");
+  const btnDismissIos = document.getElementById("btnDismissIosInstallModal");
+  const iosModal = document.getElementById("iosInstallModal");
+
+  if (btnCloseIos && iosModal) {
+    btnCloseIos.addEventListener("click", () => {
+      iosModal.style.display = "none";
+    });
+  }
+  if (btnDismissIos && iosModal) {
+    btnDismissIos.addEventListener("click", () => {
+      iosModal.style.display = "none";
+    });
+  }
+  if (iosModal) {
+    iosModal.addEventListener("click", (e) => {
+      if (e.target === iosModal) {
+        iosModal.style.display = "none";
+      }
+    });
   }
 }

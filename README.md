@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🏨 Grand Horizon Hotel PMS
+#  Grand Horizon Hotel PMS
 ### Enterprise-Grade Full-Stack Hospitality SaaS & Property Management Platform
 
 [![Python](https://img.shields.io/badge/Python-3.14-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
@@ -19,7 +19,7 @@
 
 ---
 
-## 📌 Executive Summary
+## Executive Summary
 
 **Grand Horizon PMS** is an enterprise-grade, cloud-deployed Hotel Property Management System designed to orchestrate end-to-end hotel operations for luxury resorts and boutique hotels.
 
@@ -27,52 +27,52 @@ Built from first principles with **Python FastAPI**, **Supabase PostgreSQL**, an
 
 ---
 
-## 🚀 Key System Features
+##  Key System Features
 
-### 🛎️ 1. Front Desk & Reservations Lifecycle
+### 1. Front Desk & Reservations Lifecycle
 * **Availability Engine**: Real-time room booking with strict conflict detection preventing double-booking race conditions (`HTTP 409 Conflict`).
 * **Auto-Pick Room Algorithm**: Intelligently recommends and assigns optimal rooms based on guest party size, stay dates, and cleaning status.
 * **Pricing & Rate Packages**: Support for flexible Best Available Rate (BAR), Non-Refundable Saver (15% off), Bed & Breakfast (+15%), and Extended Stay discounts (20% off).
 * **Coupon & Promotion Validator**: Server-side coupon verification with percentage or fixed discount rules.
 
-### 🛏️ 2. Room Inventory & Operations Cockpit
+###  2. Room Inventory & Operations Cockpit
 * **Multi-Category Inventory**: Penthouse Suites, Family Suites, Executive Doubles, and Deluxe Singles.
 * **Out-of-Order (OOO) Lockouts**: Automated lockout management preventing unavailable or under-repair rooms from being booked.
 * **Room Relocation Engine**: Seamless guest room transfer workflow with audit trail logging and automatic digital keycard re-encoding.
 
-### 🧹 3. Housekeeping Turnover & Cleaning Dispatch
+### 3. Housekeeping Turnover & Cleaning Dispatch
 * **Room Readiness Pipeline**: Real-time states: *Ready (Inspected)*, *Clean*, *Needs Cleaning*, *Cleaning in Progress*, *Rush / VIP*, and *Do Not Disturb (DND)*.
 * **Checklist Audits**: Linen change, bathroom sanitization, minibar restock, and supervisor approval stamps.
 
-### 🔧 4. Facilities & Maintenance Work Orders
+### 4. Facilities & Maintenance Work Orders
 * **Ticketing & Trade Dispatch**: Issue reporting for Plumbing, HVAC, Electrical, and Carpentry.
 * **Priority Escalation**: Low, Medium, High, and Urgent job queues with technician assignment and status tracking.
 
-### 👥 5. Guest Directory & Loyalty CRM
+### 5. Guest Directory & Loyalty CRM
 * **Profile Management**: Guest history, contact records, lifetime spend calculation, and special dietary/room preferences.
 * **Loyalty Tier Engine**: Automatic classification into *Standard*, *Silver*, *Gold*, and *Platinum VIP* tiers based on stay frequency.
 
-### 💳 6. Billing, Folio Charges & Multi-Currency Engine
+### 6. Billing, Folio Charges & Multi-Currency Engine
 * **Itemized Guest Folio**: Post incidentals (Room Service, Spa, Minibar, Laundry) directly to guest bills with void audit controls.
 * **Global Currency Matrix**: Real-time conversion across 7 fiat currencies (USD, EUR, GBP, JPY, CAD, AUD, CHF).
 * **Tiered Tax Rules**: Configurable jurisdictional VAT, City Lodging Tax, and Tourism Levies with automated tax-inclusive calculations.
 
-### 🔒 7. Digital Key Cards & Access Control
+###  7. Digital Key Cards & Access Control
 * **RFID / NFC Card Simulation**: Issue guest keys and staff master cards with cryptographic UID hashing.
 * **Door Tap Simulator**: Test live door access taps with real-time electronic entry granted/denied audit logging.
 
-### 📊 8. Revenue Intelligence & Pacing Forecasts
+### 8. Revenue Intelligence & Pacing Forecasts
 * **Forward Occupancy Projections**: 7, 14, and 30-day forward-looking pacing models.
 * **Category Yield Matrix**: Daily room revenue, category occupancy %, and RevPAR (Revenue Per Available Room) tracking.
 * **Stay Dynamics**: Average Length of Stay (ALOS), cancellation rates, and repeat guest loyalty metrics.
 
-### 📱 9. Progressive Web App (PWA)
+###  9. Progressive Web App (PWA)
 * **1-Click Installation**: Downloadable directly from the browser on Windows, macOS, Android, and iOS as a standalone window application.
 * **Service Worker Caching**: Offline resilience pre-caching essential shell assets with network-first fallback for API calls.
 
 ---
 
-## 🏗️ System Architecture
+##  System Architecture
 
 ```mermaid
 graph TD
@@ -115,7 +115,7 @@ graph TD
 
 ---
 
-## 🗄️ Database Entity Relationship Model (3NF)
+##  Database Entity Relationship Model (3NF)
 
 ```mermaid
 erDiagram
@@ -199,7 +199,7 @@ erDiagram
 
 ---
 
-## 🧪 Automated Testing Suite
+## Automated Testing Suite
 
 The repository contains an exhaustive automated test suite with **122+ Pytest test cases** achieving 100% pass rate:
 
@@ -238,7 +238,7 @@ test_module8.py ......                                                   [100%]
 
 ---
 
-## 💻 Local Setup & Development
+## Local Setup & Development
 
 ### Prerequisites
 * Python 3.10+ (tested through 3.14)
@@ -277,7 +277,7 @@ python -m uvicorn api.index:app --reload --port 8000
 
 ---
 
-## 👨‍💻 Author & Engineering Profile
+##  Author & Engineering Profile
 
 * **Developer**: Waqas Ahmad ([@connect2waqas](https://github.com/connect2waqas))
 * **Live Project**: [https://grand-horizon-pms.vercel.app](https://grand-horizon-pms.vercel.app)
